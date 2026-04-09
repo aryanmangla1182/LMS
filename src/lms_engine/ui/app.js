@@ -54,6 +54,7 @@ const roleForm = document.getElementById("role-form");
 const learnerForm = document.getElementById("learner-form");
 const roleStatus = document.getElementById("role-status");
 const roleDetail = document.getElementById("role-detail");
+const roleReviewHistory = document.getElementById("role-review-history");
 const reviewNoteInput = document.getElementById("review-note");
 const applyReviewBtn = document.getElementById("apply-review-btn");
 const publishRoleBtn = document.getElementById("publish-role-btn");
@@ -209,6 +210,49 @@ function normalizeDisplayName(user) {
 
 function currentSelectedRole() {
   return state.roles.find((role) => role.id === state.selectedRoleId) || null;
+}
+
+function formatTargetValue(kpi) {
+  const target = kpi?.target_value ?? "";
+  const unit = String(kpi?.unit || "").trim();
+  return unit ? `${target} ${unit}` : String(target);
+}
+
+function flattenCourseLessons(role) {
+  return (role?.course_template?.sections || []).flatMap((section) =>
+    (section.lessons || []).map((lesson) => ({ ...lesson, section_key: section.key, section_title: section.title }))
+  );
+}
+
+function openTrainerCourseMode(mode, lessonId = null) {
+  const role = currentSelectedRole();
+  if (!role) {
+    return;
+  }
+  state.trainerCourseView = { mode, lessonId };
+  setSubtab("admin", "trainer-role-course");
+  renderTrainerCoursePreview(role);
+}
+
+function attachTrainerReviewHandlers(role) {
+  document.querySelectorAll(".review-jump-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = document.getElementById(button.dataset.reviewTarget);
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+  document.querySelectorAll(".trainer-review-open-video-btn").forEach((button) => {
+    button.addEventListener("click", () => openLessonPlayer(button.dataset.lesson));
+  });
+  document.querySelectorAll(".trainer-review-open-assignment-btn, .trainer-review-open-lesson-btn").forEach((button) => {
+    button.addEventListener("click", () => openTrainerCourseMode("lesson", button.dataset.lesson));
+  });
+  document.querySelectorAll(".trainer-review-open-assessment-btn").forEach((button) => {
+    button.addEventListener("click", () => openTrainerCourseMode("assessment"));
+  });
+  document.querySelectorAll(".trainer-review-open-course-btn").forEach((button) => {
+    button.addEventListener("click", () => openTrainerCourseMode("overview"));
+  });
 }
 
 function currentStudioItem() {
@@ -408,59 +452,155 @@ function renderRoleDetail(role) {
   if (!role) {
     roleStatus.innerHTML = "No generated role yet.";
     roleDetail.innerHTML = "";
+    roleReviewHistory.innerHTML = "";
     applyReviewBtn.disabled = true;
     publishRoleBtn.disabled = true;
     return;
   }
+  const inputSummary = role.work_summary || role.summary || "Role input summary not available yet.";
+  const courseLessons = flattenCourseLessons(role);
   roleStatus.innerHTML = `
-    <div class="card card-emphasis">
-      <div class="inline">
-        <strong>${escapeHtml(role.title)}</strong>
-        <span class="chip ${statusTone(role.status)}">${escapeHtml(titleCaseLabel(role.status))}</span>
+    <div class="review-status-card">
+      <div class="review-status-copy">
+        <p class="eyebrow">Role Overview</p>
+        <div class="inline">
+          <strong>${escapeHtml(role.title)}</strong>
+          <span class="chip ${statusTone(role.status)}">${escapeHtml(titleCaseLabel(role.status))}</span>
+        </div>
+        <div class="meta">${escapeHtml(role.segment)}</div>
+        <div class="meta">${escapeHtml(inputSummary)}</div>
+        <div class="actions review-nav">
+          <button class="secondary review-jump-btn" data-review-target="review-input-data">Input Data</button>
+          <button class="secondary review-jump-btn" data-review-target="review-learning-path">Learning Path</button>
+          <button class="secondary review-jump-btn" data-review-target="review-input-section">Review Input</button>
+        </div>
       </div>
-      <div class="meta">${escapeHtml(role.segment)} · ${escapeHtml(role.level)}</div>
-      <div class="meta">${escapeHtml(role.summary || role.legacy_mapping_notes)}</div>
+      <div class="review-status-metrics">
+        <div class="mini-stat">
+          <span class="meta">Path Sections</span>
+          <strong>${escapeHtml(role.learning_path.sections.length)}</strong>
+        </div>
+        <div class="mini-stat">
+          <span class="meta">Assessment Questions</span>
+          <strong>${escapeHtml(role.course_template.assessment.questions.length)}</strong>
+        </div>
+      </div>
     </div>
   `;
+  const skillNameById = Object.fromEntries((role.skills || []).map((item) => [item.id, item.name]));
+  const kpiNameById = Object.fromEntries((role.kpis || []).map((item) => [item.id, item.name]));
+  roleReviewHistory.innerHTML = role.review_notes?.length
+    ? role.review_notes.map((item, index) => `
+      <div class="review-note-card">
+        <div class="inline">
+          <strong>Review ${index + 1}</strong>
+          <span class="chip soft">Saved</span>
+        </div>
+        <div class="meta">${escapeHtml(item.text)}</div>
+      </div>
+    `).join("")
+    : `<div class="empty review-empty">No review notes added yet.</div>`;
   roleDetail.innerHTML = `
-    <div class="split-two">
-      <div class="card">
-        <h3 class="section-title">Responsibilities</h3>
-        <div class="tag-row">${role.responsibilities.map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("")}</div>
+    <section id="review-input-data" class="review-stage review-stage-box">
+      <div class="review-stage-head">
+        <div>
+          <p class="eyebrow">1. Input Data</p>
+          <h3>Role Input Data</h3>
+        </div>
+        <p class="meta">Original role details captured before course generation.</p>
       </div>
-      <div class="card">
-        <h3 class="section-title">Role Notes</h3>
-        <div class="meta">${escapeHtml(role.legacy_mapping_notes)}</div>
-      </div>
-    </div>
-    <div class="card">
-      <h3 class="section-title">Review History</h3>
-      <div class="stack">
-        ${role.review_notes?.length ? role.review_notes.map((item, index) => `
-          <div class="spotlight">
-            <strong>Review ${index + 1}</strong>
-            <div class="meta">${escapeHtml(item.text)}</div>
+      <div class="review-grid">
+        <div class="card review-card">
+          <h4 class="section-title">Role Details</h4>
+          <div class="review-key-value">
+            <div><span class="meta">Segment</span><strong>${escapeHtml(role.segment)}</strong></div>
+            <div><span class="meta">Role</span><strong>${escapeHtml(role.title)}</strong></div>
+            <div><span class="meta">Status</span><strong>${escapeHtml(titleCaseLabel(role.status))}</strong></div>
           </div>
-        `).join("") : `<div class="meta">No review notes added yet.</div>`}
-      </div>
-    </div>
-    <div class="card">
-      <h3 class="section-title">Skills</h3>
-      <div class="tag-row">${role.skills.map((item) => `<span class="chip">${escapeHtml(item.name)}</span>`).join("")}</div>
-    </div>
-    <div class="card">
-      <h3 class="section-title">KPIs</h3>
-      <div class="split-two">
-        ${role.kpis.map((kpi) => `
-          <div class="mini-stat">
-            <strong>${escapeHtml(kpi.name)}</strong>
-            <div class="meta">${escapeHtml(kpi.description)}</div>
-            <div class="meta">Target ${escapeHtml(kpi.target_value)}${escapeHtml(kpi.unit)}</div>
+        </div>
+        <div class="card review-card review-card-wide">
+          <h4 class="section-title">Work Summary</h4>
+          <div class="review-copy">${escapeHtml(role.work_summary || "No work summary added.")}</div>
+        </div>
+        <div class="card review-card">
+          <h4 class="section-title">Responsibilities</h4>
+          <div class="tag-row">${role.responsibilities.map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("")}</div>
+        </div>
+        <div class="card review-card">
+          <h4 class="section-title">Skills</h4>
+          <div class="tag-row">${role.skills.map((item) => `<span class="chip">${escapeHtml(item.name)}</span>`).join("")}</div>
+        </div>
+        <div class="card review-card review-card-wide">
+          <h4 class="section-title">KPIs</h4>
+          <div class="review-kpi-grid">
+            ${role.kpis.map((kpi) => `
+              <div class="mini-stat review-kpi-card">
+                <strong>${escapeHtml(kpi.name)}</strong>
+                <div class="meta">${escapeHtml(kpi.description)}</div>
+                <div class="meta">Target ${escapeHtml(formatTargetValue(kpi))}</div>
+                <div class="meta">Weak threshold ${escapeHtml(kpi.weak_threshold)}</div>
+              </div>
+            `).join("")}
           </div>
+        </div>
+      </div>
+    </section>
+    <section id="review-learning-path" class="review-stage review-stage-box">
+      <div class="review-stage-head">
+        <div>
+          <p class="eyebrow">2. Learning Path</p>
+          <h3>Learner Course Preview</h3>
+        </div>
+        <p class="meta">Review the exact lesson flow the learner will see before approval.</p>
+      </div>
+      <div class="stack detail-list">
+        ${(role.course_template.sections || []).map((section, index) => `
+          <details class="learning-path-section review-path-card" ${index === 0 ? "open" : ""}>
+            <summary class="learning-path-summary">
+              <div class="learning-path-head">
+                <div>
+                  <div class="inline">
+                    <strong>${index + 1}. ${escapeHtml(section.title)}</strong>
+                    <span class="chip">${section.lessons.length} lessons</span>
+                  </div>
+                  <div class="meta">${escapeHtml(section.description)}</div>
+                </div>
+              </div>
+            </summary>
+            <div class="stack learning-path-content">
+              ${section.lessons.map((lesson) => `
+                <div class="lesson lesson-card">
+                  <div class="inline">
+                    <strong>${escapeHtml(lesson.title)}</strong>
+                    <span class="chip">${escapeHtml(lesson.resource_type)}</span>
+                    <span class="chip">${escapeHtml(lesson.duration_minutes)} min</span>
+                  </div>
+                  <div class="meta">${escapeHtml(lesson.summary)}</div>
+                  <div class="meta">Skills: ${lesson.skill_ids?.length ? lesson.skill_ids.map((id) => escapeHtml(skillNameById[id] || id)).join(", ") : "None linked"}</div>
+                  <div class="meta">KPIs: ${lesson.kpi_ids?.length ? lesson.kpi_ids.map((id) => escapeHtml(kpiNameById[id] || id)).join(", ") : "None linked"}</div>
+                  <div class="actions">
+                    ${lesson.resource_type === "video" ? `<button class="secondary trainer-review-open-video-btn" data-lesson="${lesson.id}">Open Video</button>` : ""}
+                    ${lesson.resource_type === "assignment" ? `<button class="secondary trainer-review-open-assignment-btn" data-lesson="${lesson.id}">Open Assignment</button>` : ""}
+                    ${lesson.resource_type === "document" ? `<button class="secondary trainer-review-open-lesson-btn" data-lesson="${lesson.id}">Open Lesson</button>` : ""}
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+          </details>
         `).join("")}
+        <div class="card review-card">
+          <h4 class="section-title">Assessment Preview</h4>
+          <div class="meta">${role.course_template.assessment.questions.length} MCQs with learner-facing preview access from this page.</div>
+          <div class="meta">${courseLessons.filter((lesson) => lesson.resource_type === "video").length} videos · ${courseLessons.filter((lesson) => lesson.resource_type === "assignment").length} assignments · ${courseLessons.filter((lesson) => lesson.resource_type === "document").length} lessons</div>
+          <div class="actions">
+            <button class="secondary trainer-review-open-assessment-btn">Open MCQ Preview</button>
+          </div>
+        </div>
       </div>
+    </section>
     </div>
   `;
+  attachTrainerReviewHandlers(role);
   applyReviewBtn.disabled = false;
   publishRoleBtn.disabled = role.status === "published";
 }
@@ -693,293 +833,6 @@ function renderTrainerRoleLibrary() {
       setSubtab("admin", "trainer-role-course");
     });
   });
-}
-
-function renderKpiStudio() {
-  if (!kpiStudioSummary || !kpiStudioList || !kpiStudioDetail) {
-    return;
-  }
-
-  const items = state.kpiStudio.items || [];
-  const activeItem = currentStudioItem();
-  if (activeItem && state.kpiStudio.activeItemId !== activeItem.id) {
-    state.kpiStudio.activeItemId = activeItem.id;
-  }
-  const activeVersion = currentStudioVersion(activeItem);
-  if (activeVersion && state.kpiStudio.activeVersionId !== activeVersion.id) {
-    state.kpiStudio.activeVersionId = activeVersion.id;
-  }
-
-  const approvedCount = items.filter((item) => item.published).length;
-  const generatedCount = items.filter((item) => (item.video_versions || []).length > 0).length;
-  kpiStudioSummary.innerHTML = `
-    <div class="card">
-      <div class="inline">
-        <strong>${escapeHtml(state.kpiStudio.roleName || activeItem?.role_name || "Role pending")}</strong>
-        <span class="chip soft">${items.length} KPI tracks</span>
-        <span class="chip">${generatedCount} videos generated</span>
-        <span class="chip ${approvedCount ? "soft" : "warn"}">${approvedCount} approved</span>
-      </div>
-      <div class="meta">Create one training video per KPI, refine a selected draft with feedback, then approve the final version to unlock the quiz.</div>
-      <div class="actions">
-        <button class="primary studio-generate-all-btn" ${state.kpiStudio.isGenerating || !items.length ? "disabled" : ""}>Generate Missing Videos</button>
-        ${state.kpiStudio.isGenerating ? `<span class="chip warn">Generating in sequence...</span>` : ""}
-      </div>
-      ${state.kpiStudio.lastError ? `<div class="empty">${escapeHtml(state.kpiStudio.lastError)}</div>` : ""}
-    </div>
-  `;
-
-  if (!items.length) {
-    kpiStudioList.innerHTML = `<div class="empty">Submit the role form to create KPI video drafts.</div>`;
-    kpiStudioDetail.innerHTML = `<div class="empty">Select a KPI once the studio session is ready.</div>`;
-    return;
-  }
-
-  kpiStudioList.innerHTML = `
-    <div class="card">
-      <div class="inline">
-        <strong>KPI Queue</strong>
-        <span class="chip">${items.length} items</span>
-      </div>
-      <div class="meta">Pick a KPI to review the current version, request changes, or approve the final video.</div>
-    </div>
-    ${items.map((item) => {
-      const latestVersion = item.video_versions[item.video_versions.length - 1];
-      const status = item.published ? "approved" : latestVersion ? latestVersion.status : item.studio_status;
-      return `
-      <div class="card role-card-clickable studio-item-card ${item.id === state.kpiStudio.activeItemId ? "is-active" : ""}" data-studio-item="${item.id}">
-        <div class="inline">
-          <strong>${escapeHtml(item.kpi_name)}</strong>
-          <span class="chip ${item.published ? "soft" : statusTone(status)}">${escapeHtml(titleCaseLabel(status))}</span>
-        </div>
-        <div class="meta">${escapeHtml(item.category)} · ${escapeHtml(item.training_objective)}</div>
-        <div class="meta">${item.video_versions.length} version(s) ${latestVersion?.generation_job?.error ? `· ${escapeHtml(latestVersion.generation_job.error)}` : ""}</div>
-        <div class="actions">
-          <button class="secondary studio-item-open-btn" data-item="${item.id}">Open</button>
-          <button class="secondary studio-item-generate-btn" data-item="${item.id}" ${state.kpiStudio.isGenerating ? "disabled" : ""}>${item.video_versions.length ? "Regenerate" : "Generate"}</button>
-        </div>
-      </div>
-    `;
-    }).join("")}
-  `;
-
-  if (!activeItem) {
-    kpiStudioDetail.innerHTML = `<div class="empty">Select a KPI to review its training video.</div>`;
-    return;
-  }
-
-  const versionCards = (activeItem.video_versions || []).map((version) => `
-    <button class="secondary studio-version-btn ${version.id === state.kpiStudio.activeVersionId ? "studio-version-active" : ""}" data-version="${version.id}">
-      V${escapeHtml(version.version_number)} · ${escapeHtml(titleCaseLabel(version.status))}
-    </button>
-  `).join("");
-  const quizMarkup = activeItem.quiz ? `
-    <div class="card">
-      <div class="inline">
-        <strong>Approved Quiz</strong>
-        <span class="chip soft">${activeItem.quiz.questions.length} questions</span>
-      </div>
-      <div class="stack">
-        ${activeItem.quiz.questions.map((question, index) => `
-          <div class="question">
-            <strong>Q${index + 1}. ${escapeHtml(question.prompt)}</strong>
-            <div class="question-options">
-              ${question.options.map((option, optionIndex) => `
-                <div class="question-option ${optionIndex === question.correct_option_index ? "selected" : ""}">
-                  <span>${escapeHtml(option)}</span>
-                </div>
-              `).join("")}
-            </div>
-            <div class="meta">${escapeHtml(question.explanation)}</div>
-          </div>
-        `).join("")}
-      </div>
-    </div>
-  ` : `<div class="card"><strong>Quiz pending</strong><div class="meta">Approve a video version for this KPI to generate the quiz.</div></div>`;
-
-  kpiStudioDetail.innerHTML = `
-    <div class="card">
-      <div class="inline">
-        <strong>Selected KPI</strong>
-        <span class="chip">${escapeHtml(activeItem.kpi_name)}</span>
-        <span class="chip">${escapeHtml(activeItem.category)}</span>
-        ${activeItem.published ? `<span class="chip soft">Approved</span>` : ""}
-      </div>
-      <div class="meta">${escapeHtml(activeItem.training_objective)}</div>
-      <div class="meta">Role: ${escapeHtml(activeItem.role_name || state.kpiStudio.roleName || "Pending")}</div>
-      ${versionCards ? `<div class="actions">${versionCards}</div>` : ""}
-    </div>
-    ${activeVersion ? `
-      <div class="card">
-        <div class="inline">
-          <strong>Video Review</strong>
-          <span class="chip">Version ${escapeHtml(activeVersion.version_number)}</span>
-          <span class="chip ${statusTone(activeVersion.status)}">${escapeHtml(titleCaseLabel(activeVersion.status))}</span>
-          <span class="chip">${escapeHtml(activeVersion.generation_job.provider)}</span>
-        </div>
-        <div class="meta">${escapeHtml(activeVersion.operator_notes || "Initial video draft for this KPI.")}</div>
-        ${activeVersion.video_url ? `<video class="studio-video-player" src="${escapeHtml(activeVersion.video_url)}" controls playsinline></video>` : `<div class="empty">Video file is not ready yet.</div>`}
-        <div class="stack">
-          ${(activeVersion.scene_plan || []).map((scene) => `
-            <div class="spotlight">
-              <div class="inline">
-                <strong>Scene ${escapeHtml(scene.scene_number)}. ${escapeHtml(scene.title)}</strong>
-                <span class="chip">${escapeHtml(scene.duration_seconds)}s</span>
-              </div>
-              <div class="meta">${escapeHtml(scene.narration)}</div>
-            </div>
-          `).join("")}
-        </div>
-        <div class="actions">
-          <button class="primary studio-approve-btn" ${activeItem.published ? "disabled" : ""}>Approve Video</button>
-          <button class="secondary studio-reopen-btn" ${activeItem.published ? "" : "disabled"}>Reopen KPI</button>
-        </div>
-      </div>
-      <form class="form studio-feedback-form">
-        <label>Feedback For Changes
-          <textarea name="revision_prompt" rows="4" placeholder="Example: add stronger floor examples, simplify the closing coaching cue."></textarea>
-        </label>
-        <div class="actions">
-          <button type="submit" class="primary" ${state.kpiStudio.isGenerating ? "disabled" : ""}>Create Revised Video</button>
-        </div>
-      </form>
-    ` : `
-      <div class="empty">No video generated yet for this KPI. Generate the first version to start review.</div>
-    `}
-    ${quizMarkup}
-  `;
-
-  document.querySelector(".studio-generate-all-btn")?.addEventListener("click", () => {
-    generateMissingStudioVideos().catch((error) => alert(error.message));
-  });
-  document.querySelectorAll(".studio-item-open-btn").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.kpiStudio.activeItemId = button.dataset.item;
-      state.kpiStudio.activeVersionId = null;
-      renderKpiStudio();
-    });
-  });
-  document.querySelectorAll(".studio-item-generate-btn").forEach((button) => {
-    button.addEventListener("click", () => {
-      generateStudioVideo(button.dataset.item).catch((error) => alert(error.message));
-    });
-  });
-  document.querySelectorAll(".studio-item-card").forEach((card) => {
-    card.addEventListener("click", () => {
-      state.kpiStudio.activeItemId = card.dataset.studioItem;
-      state.kpiStudio.activeVersionId = null;
-      renderKpiStudio();
-    });
-  });
-  document.querySelectorAll(".studio-version-btn").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.kpiStudio.activeVersionId = button.dataset.version;
-      renderKpiStudio();
-    });
-  });
-  document.querySelector(".studio-approve-btn")?.addEventListener("click", () => {
-    approveStudioVideo().catch((error) => alert(error.message));
-  });
-  document.querySelector(".studio-reopen-btn")?.addEventListener("click", () => {
-    reopenStudioItem().catch((error) => alert(error.message));
-  });
-  document.querySelector(".studio-feedback-form")?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const revisionPrompt = String(formData.get("revision_prompt") || "").trim();
-    generateStudioVideo(activeItem.id, revisionPrompt).catch((error) => alert(error.message));
-  });
-}
-
-async function refreshKpiStudio() {
-  const res = await fetchJson("/studio/kpis");
-  state.kpiStudio.items = res.items;
-  if (!state.kpiStudio.activeItemId || !state.kpiStudio.items.some((item) => item.id === state.kpiStudio.activeItemId)) {
-    state.kpiStudio.activeItemId = state.kpiStudio.items[0]?.id || null;
-  }
-  const activeItem = currentStudioItem();
-  if (activeItem) {
-    state.kpiStudio.roleName = activeItem.role_name || state.kpiStudio.roleName;
-    const activeVersion = currentStudioVersion(activeItem);
-    state.kpiStudio.activeVersionId = activeVersion?.id || null;
-  }
-  renderKpiStudio();
-}
-
-async function generateStudioVideo(itemId, revisionPrompt = "") {
-  const item = state.kpiStudio.items.find((entry) => entry.id === itemId);
-  const roleName = state.kpiStudio.roleName || item?.role_name || currentSelectedRole()?.title || "";
-  state.kpiStudio.isGenerating = true;
-  state.kpiStudio.lastError = "";
-  renderKpiStudio();
-  try {
-    const res = await fetchJson(`/studio/kpis/${itemId}/versions`, {
-      method: "POST",
-      body: JSON.stringify({ role_name: roleName, revision_prompt: revisionPrompt }),
-    });
-    state.kpiStudio.activeItemId = itemId;
-    state.kpiStudio.activeVersionId = res.item.id;
-    await refreshKpiStudio();
-  } catch (error) {
-    state.kpiStudio.lastError = error.message;
-    renderKpiStudio();
-    throw error;
-  } finally {
-    state.kpiStudio.isGenerating = false;
-    renderKpiStudio();
-  }
-}
-
-async function generateMissingStudioVideos() {
-  if (state.kpiStudio.isGenerating) {
-    return;
-  }
-  state.kpiStudio.isGenerating = true;
-  state.kpiStudio.lastError = "";
-  renderKpiStudio();
-  try {
-    for (const item of state.kpiStudio.items.filter((entry) => !(entry.video_versions || []).length)) {
-      const res = await fetchJson(`/studio/kpis/${item.id}/versions`, {
-        method: "POST",
-        body: JSON.stringify({ role_name: state.kpiStudio.roleName || item.role_name }),
-      });
-      state.kpiStudio.activeItemId = item.id;
-      state.kpiStudio.activeVersionId = res.item.id;
-      await refreshKpiStudio();
-    }
-  } catch (error) {
-    state.kpiStudio.lastError = error.message;
-    renderKpiStudio();
-    throw error;
-  } finally {
-    state.kpiStudio.isGenerating = false;
-    renderKpiStudio();
-  }
-}
-
-async function approveStudioVideo() {
-  const item = currentStudioItem();
-  const version = currentStudioVersion(item);
-  if (!item || !version) {
-    return;
-  }
-  await fetchJson(`/studio/kpis/${item.id}/versions/${version.id}/approve`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
-  await refreshKpiStudio();
-}
-
-async function reopenStudioItem() {
-  const item = currentStudioItem();
-  if (!item) {
-    return;
-  }
-  await fetchJson(`/studio/kpis/${item.id}/reopen`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
-  await refreshKpiStudio();
 }
 
 function renderLearnerDashboard(dashboard) {
@@ -1902,23 +1755,10 @@ roleForm.addEventListener("submit", async (event) => {
     kpis: parseKpis(formData.get("kpis")),
   };
   try {
-    const [roleRes, studioRes] = await Promise.all([
-      fetchJson("/api/roles/generate", { method: "POST", body: JSON.stringify(payload) }),
-      fetchJson("/studio/session", {
-        method: "POST",
-        body: JSON.stringify({ ...payload, role_name: payload.title }),
-      }),
-    ]);
-    state.selectedRoleId = roleRes.item.id;
-    state.kpiStudio.items = studioRes.items;
-    state.kpiStudio.roleName = String(payload.title || "");
-    state.kpiStudio.activeItemId = studioRes.items[0]?.id || null;
-    state.kpiStudio.activeVersionId = null;
-    state.kpiStudio.lastError = "";
+    const res = await fetchJson("/api/roles/generate", { method: "POST", body: JSON.stringify(payload) });
+    state.selectedRoleId = res.item.id;
     setSubtab("admin", "trainer-review");
     await refreshTrainerData();
-    renderKpiStudio();
-    await generateMissingStudioVideos();
   } catch (error) {
     alert(error.message);
   }
@@ -1993,7 +1833,7 @@ async function bootWorkspace() {
   showWorkspace();
   setVisibilityForUser();
   if (state.currentUser.user_type === "trainer") {
-    await Promise.all([refreshTrainerData(), refreshKpiStudio()]);
+    await refreshTrainerData();
   } else {
     await refreshLearnerData();
   }

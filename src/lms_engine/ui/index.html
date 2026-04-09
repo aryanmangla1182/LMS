@@ -129,7 +129,12 @@
               </div>
             </div>
             <form id="role-form" class="form">
-              <label>Segment<input name="segment" value="Retail" required></label>
+              <label class="segment-field">Segment
+                <select name="segment" class="segment-select" required>
+                  <option value="Fitness Services">Fitness Services</option>
+                  <option value="Fitness Equipments">Fitness Equipments</option>
+                </select>
+              </label>
               <label>Role Title<input name="title" value="Store Manager" required></label>
               <label>Level<input name="level" value="L3" required></label>
               <label>Legacy Mapping<input name="legacy_mappings" value="Store Lead, Senior Associate"></label>
@@ -185,6 +190,25 @@ Conv|CONVERSION|30|%|0.85</textarea></label>
                   <div id="kpi-studio-detail" class="stack"></div>
                 </div>
               </div>
+              <div id="role-detail" class="stack role-detail-stack"></div>
+              <section id="review-input-section" class="review-box">
+                <div class="review-box-head">
+                  <div>
+                    <p class="eyebrow">3. Review Input</p>
+                    <h3>Review Notes And Approval</h3>
+                  </div>
+                  <p class="meta">Capture reviewer suggestions here, then approve once the role input and learning path look right.</p>
+                </div>
+                <div id="role-review-history" class="stack review-history-list"></div>
+                <label>
+                  Review Suggestions
+                  <textarea id="review-note" rows="4" placeholder="Add change requests before approval."></textarea>
+                </label>
+                <div class="actions review-actions">
+                  <button id="apply-review-btn" class="secondary" disabled>Apply Review</button>
+                  <button id="publish-role-btn" class="primary" disabled>Approve & Create Course</button>
+                </div>
+              </section>
             </div>
           </article>
         </section>
@@ -244,45 +268,21 @@ Conv|CONVERSION|30|%|0.85</textarea></label>
       </section>
 
       <section id="learner" class="tab-panel learner-only">
-        <nav class="subtabs" data-group="learner">
-          <button class="subtab active" data-group="learner" data-subtab="learner-course">Course</button>
-          <button class="subtab" data-group="learner" data-subtab="learner-review">Review</button>
-        </nav>
-
-        <section id="learner-course" class="subtab-panel active" data-group="learner">
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Assigned Course</p>
-                <h2 id="learner-course-title">My Learning Journey</h2>
-              </div>
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Assigned Course</p>
+              <h2 id="learner-course-title">My Learning Journey</h2>
             </div>
-            <div id="learner-metrics" class="metric-banner empty">Sign in as a learner to view your role course.</div>
-            <div id="course-view" class="stack"></div>
-          </article>
-        </section>
-
-        <section id="learner-review" class="subtab-panel" data-group="learner">
-          <article class="panel">
-            <div class="panel-head role-course-head">
-              <div>
-                <p class="eyebrow">Review</p>
-                <h2>Progress And Performance</h2>
-              </div>
-              <button id="learner-review-back-btn" class="secondary">Back To Course</button>
-            </div>
-            <div id="learner-review-summary" class="grid two"></div>
-            <div id="assessment-result" class="stack"></div>
-            <div id="kpi-view" class="stack"></div>
-          </article>
-        </section>
+          </div>
+          <div id="course-view" class="stack"></div>
+        </article>
       </section>
 
       <section id="trainer" class="tab-panel trainer-only">
         <nav class="subtabs" data-group="trainer">
           <button class="subtab active" data-group="trainer" data-subtab="trainer-overview">Overview</button>
           <button class="subtab" data-group="trainer" data-subtab="trainer-roles">Roles</button>
-          <button class="subtab" data-group="trainer" data-subtab="trainer-hotspots">Hotspots</button>
         </nav>
 
         <section id="trainer-overview" class="subtab-panel active" data-group="trainer">
@@ -292,7 +292,7 @@ Conv|CONVERSION|30|%|0.85</textarea></label>
               <div class="panel-head">
                 <div>
                   <p class="eyebrow">Overview</p>
-                  <h2>Training Snapshot</h2>
+                  <h2>Core Metrics</h2>
                 </div>
               </div>
               <div id="trainer-overview-detail" class="stack"></div>
@@ -301,8 +301,8 @@ Conv|CONVERSION|30|%|0.85</textarea></label>
             <article class="panel">
               <div class="panel-head">
                 <div>
-                  <p class="eyebrow">Insights</p>
-                  <h2>Immediate Actions</h2>
+                  <p class="eyebrow">Focus</p>
+                  <h2>Where To Act</h2>
                 </div>
               </div>
               <div id="trainer-insights" class="stack"></div>
