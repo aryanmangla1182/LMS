@@ -419,16 +419,61 @@ body {
   font-size: 1rem;
 }
 
-.review-path-card[open] .learning-path-summary::after {
+.review-path-card[open] .learning-path-summary::after,
+.learner-module-card[open] .learning-path-summary::after {
   content: "−";
 }
 
-.review-path-card {
+.review-path-card,
+.learner-module-card {
   position: relative;
 }
 
 .learning-path-content {
   margin-top: 14px;
+  gap: 16px;
+}
+
+.learner-module-card {
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+}
+
+.learning-path-section.learner-module-card {
+  gap: 16px;
+}
+
+.module-review-card {
+  display: grid;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, #f8fbfd, #ffffff);
+  padding: 22px;
+  gap: 20px;
+}
+
+.module-review-head {
+  display: grid;
+  gap: 10px;
+}
+
+.module-review-card .compact-grid {
+  gap: 18px;
+}
+
+.module-review-card .spotlight {
+  display: grid;
+  padding: 18px 20px;
+  gap: 12px;
+}
+
+.module-review-card .section-title {
+  margin-bottom: 4px;
+}
+
+.module-review-grid {
+  margin-top: 2px;
 }
 
 .asset-item-card {
@@ -740,6 +785,11 @@ button:disabled {
   border-radius: 14px;
   background: var(--surface-alt);
   padding: 14px;
+}
+
+.spotlight {
+  display: grid;
+  gap: 8px;
 }
 
 .metric-grid,

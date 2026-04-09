@@ -58,12 +58,7 @@ const trainerRoleLibrary = document.getElementById("trainer-role-library");
 const backToRolesBtn = document.getElementById("back-to-roles-btn");
 const adminSummary = document.getElementById("admin-summary");
 const learnerCourseTitle = document.getElementById("learner-course-title");
-const learnerReviewBackBtn = document.getElementById("learner-review-back-btn");
-const learnerMetrics = document.getElementById("learner-metrics");
 const courseView = document.getElementById("course-view");
-const learnerReviewSummary = document.getElementById("learner-review-summary");
-const assessmentResult = document.getElementById("assessment-result");
-const kpiView = document.getElementById("kpi-view");
 const lessonPlayerModal = document.getElementById("lesson-player-modal");
 const lessonPlayerTitle = document.getElementById("lesson-player-title");
 const lessonPlayerBadge = document.getElementById("lesson-player-badge");
@@ -350,7 +345,6 @@ function setVisibilityForUser() {
     `;
   } else {
     setTab("learner");
-    setSubtab("learner", state.activeSubtabs.learner || "learner-course");
     workspaceRoleChip.textContent = "Learner";
     userBannerTitle.textContent = "My Learning";
     userBannerCopy.textContent = `${displayName} · role-based access only`;
@@ -807,6 +801,42 @@ function renderTrainerRoleLibrary() {
   });
 }
 
+function buildLearnerModuleReview(section, dashboard) {
+  const skillNameById = Object.fromEntries((dashboard.role.skills || []).map((item) => [item.id, item.name]));
+  const kpiNameById = Object.fromEntries((dashboard.role.kpis || []).map((item) => [item.id, item.name]));
+  const completedLessonIds = new Set(dashboard.enrollment.completed_lesson_ids || []);
+  const lessonCount = section.lessons.length || 0;
+  const completedCount = section.lessons.filter((lesson) => completedLessonIds.has(lesson.id)).length;
+  const completionPercentage = lessonCount ? Math.round((completedCount / lessonCount) * 100) : 0;
+  const sectionSkillNames = [...new Set(section.lessons.flatMap((lesson) => lesson.skill_ids || []).map((id) => skillNameById[id]).filter(Boolean))];
+  const sectionKpiNames = [...new Set(section.lessons.flatMap((lesson) => lesson.kpi_ids || []).map((id) => kpiNameById[id]).filter(Boolean))];
+  const latestAttempt = dashboard.latest_assessment || null;
+  const weakSkills = (latestAttempt?.weak_skills || []).filter((item) => sectionSkillNames.includes(item.skill_name));
+  const weakKpis = (latestAttempt?.weak_kpis || []).filter((item) => sectionKpiNames.includes(item.kpi_name));
+  const relatedObservations = (dashboard.kpi_observations || []).filter((item) => sectionKpiNames.includes(item.kpi_name));
+  const relatedPlans = (dashboard.remediation_assignments || []).filter((item) =>
+    sectionKpiNames.some((name) => item.title?.includes(name) || item.summary?.includes(name))
+  );
+  let statusLabel = "In Progress";
+  if (completionPercentage === 100 && !weakSkills.length && !weakKpis.length && !relatedPlans.some((item) => item.status === "assigned")) {
+    statusLabel = "On Track";
+  } else if (weakSkills.length || weakKpis.length || relatedPlans.some((item) => item.status === "assigned")) {
+    statusLabel = "Needs Attention";
+  }
+  return {
+    lessonCount,
+    completedCount,
+    completionPercentage,
+    sectionSkillNames,
+    sectionKpiNames,
+    weakSkills,
+    weakKpis,
+    relatedObservations,
+    relatedPlans,
+    statusLabel,
+  };
+}
+
 function renderLearnerDashboard(dashboard) {
   state.learnerDashboard = dashboard;
   initializeInlineVideoPlayers(dashboard);
@@ -816,29 +846,10 @@ function renderLearnerDashboard(dashboard) {
     questions.map((question) => [question.id, Object.prototype.hasOwnProperty.call(previousAnswers, question.id) ? previousAnswers[question.id] : null])
   );
   state.currentQuestionIndex = Math.min(state.currentQuestionIndex, Math.max(questions.length - 1, 0));
-  const metrics = dashboard.metrics;
-  learnerMetrics.innerHTML = `
-    <div class="inline">
-      <strong>${escapeHtml(dashboard.role.title)}</strong>
-      <span class="chip soft">${escapeHtml(dashboard.role.segment)}</span>
-    </div>
-    <div class="meta">${escapeHtml(dashboard.role.summary || dashboard.role.work_summary || "")}</div>
-    <div class="progress-track"><div class="progress-fill" style="width:${metrics.completion_percentage}%"></div></div>
-    <div class="metric-grid">
-      <div class="metric-item"><span class="meta">Completion</span><strong>${metrics.completion_percentage}%</strong></div>
-      <div class="metric-item"><span class="meta">Assessment</span><strong>${metrics.latest_assessment_score ?? "--"}</strong></div>
-      <div class="metric-item"><span class="meta">Weak Skills</span><strong>${metrics.weak_skill_count}</strong></div>
-      <div class="metric-item"><span class="meta">Weak KPIs</span><strong>${metrics.weak_kpis}</strong></div>
-    </div>
-  `;
-
   renderLearnerCoursePage(dashboard);
-  renderLearnerReview(dashboard);
 }
 
 function renderLearnerCoursePage(dashboard) {
-  const latestAttempt = dashboard.latest_assessment;
-  const openImprovementPlan = (dashboard.remediation_assignments || []).find((item) => item.status === "assigned");
   const sections = dashboard.enrollment.course.sections || [];
   learnerCourseTitle.textContent = `${dashboard.role.title} Course`;
 
@@ -860,7 +871,7 @@ function renderLearnerCoursePage(dashboard) {
         </div>
         <div class="meta">${escapeHtml(lesson.summary)}</div>
         <div class="actions">
-          <button class="secondary learner-course-back-btn">Back To Course</button>
+          <button class="secondary learner-course-back-btn">Back To Modules</button>
           ${lesson.resource_type === "video" ? `<button class="primary learner-open-video-btn" data-lesson="${lesson.id}">Open Video</button>` : ""}
           ${!complete ? `<button class="secondary complete-lesson-btn" data-lesson="${lesson.id}">${lesson.resource_type === "assignment" ? "Submit Assignment" : "Mark Complete"}</button>` : ""}
         </div>
@@ -900,7 +911,7 @@ function renderLearnerCoursePage(dashboard) {
         </div>
         <div class="meta">Complete the assessment and your review page will update with weak skills, KPI risk areas, and question analysis.</div>
         <div class="actions">
-          <button class="secondary learner-course-back-btn">Back To Course</button>
+          <button class="secondary learner-course-back-btn">Back To Modules</button>
           <button class="primary learner-submit-assessment-btn" ${assessment.questions.some((question) => state.assessmentAnswers[question.id] === null || state.assessmentAnswers[question.id] === undefined) ? "disabled" : ""}>Submit Assessment</button>
         </div>
       </div>
@@ -933,7 +944,7 @@ function renderLearnerCoursePage(dashboard) {
         </div>
         <div class="meta">Record current performance against your role KPIs. The review page will update with KPI health and improvement plans.</div>
         <div class="actions">
-          <button class="secondary learner-course-back-btn">Back To Course</button>
+          <button class="secondary learner-course-back-btn">Back To Modules</button>
         </div>
       </div>
       <form id="course-kpi-form" class="form card">
@@ -950,160 +961,82 @@ function renderLearnerCoursePage(dashboard) {
   }
 
   courseView.innerHTML = `
-    <div class="grid two learner-overview-grid">
-      <div class="card">
-        <h3 class="section-title">Current Focus</h3>
-        <div class="stack">
-          <div class="spotlight">
-            <strong>${openImprovementPlan ? "Improvement plan active" : "Current focus"}</strong>
-            <div class="meta">${escapeHtml(openImprovementPlan ? openImprovementPlan.summary : "Finish the remaining lessons and complete the mastery check for your role.")}</div>
-          </div>
-          <div class="spotlight">
-            <strong>${latestAttempt ? "Latest assessment summary" : "Assessment not submitted yet"}</strong>
-            <div class="meta">${escapeHtml(latestAttempt ? latestAttempt.analysis_summary : "Complete the course first, then take the assessment to get skill and KPI analysis.")}</div>
-          </div>
-        </div>
-      </div>
-      <div class="card">
-        <h3 class="section-title">Course Status</h3>
-        <div class="metric-grid">
-          <div class="metric-item"><span class="meta">Lessons Done</span><strong>${dashboard.metrics.lessons_completed}/${dashboard.metrics.total_lessons}</strong></div>
-          <div class="metric-item"><span class="meta">Healthy KPIs</span><strong>${dashboard.metrics.healthy_kpis}</strong></div>
-        </div>
-        <div class="actions">
-          <button class="secondary learner-open-assessment-btn">Open Assessment</button>
-          <button class="secondary learner-open-kpi-btn">Record KPI</button>
-        </div>
-      </div>
-    </div>
-    ${sections.map((section) => `
-    <div class="card">
-      <div class="inline">
-        <h3 class="section-title">${escapeHtml(section.title)}</h3>
-        <span class="chip">${section.lessons.length} lessons</span>
-      </div>
-      <div class="meta">${escapeHtml(section.description)}</div>
-      <div class="stack">
-        ${section.lessons.map((lesson) => {
-          const complete = dashboard.enrollment.completed_lesson_ids.includes(lesson.id);
-          return `
-            <div class="lesson lesson-card ${complete ? "lesson-complete" : ""}">
-              <div class="inline">
-                <strong>${escapeHtml(lesson.title)}</strong>
-                <span class="chip">${escapeHtml(lesson.resource_type)}</span>
-                <span class="chip">${escapeHtml(lesson.duration_minutes)} min</span>
-                ${complete ? `<span class="chip soft">Completed</span>` : ""}
-              </div>
-              <div class="meta">${escapeHtml(lesson.summary)}</div>
-              <div class="actions">
-                ${lesson.resource_type === "video" ? `<button class="secondary learner-open-video-btn" data-lesson="${lesson.id}">Open Video</button>` : ""}
-                ${lesson.resource_type === "assignment" ? `<button class="secondary learner-open-assignment-btn" data-lesson="${lesson.id}">Open Assignment</button>` : ""}
-                ${lesson.resource_type === "document" ? `<button class="secondary learner-open-lesson-btn" data-lesson="${lesson.id}">Open Lesson</button>` : ""}
-                ${!complete ? `<button class="secondary complete-lesson-btn" data-lesson="${lesson.id}">${lesson.resource_type === "assignment" ? "Submit Assignment" : "Mark Complete"}</button>` : ""}
+    ${sections.map((section, index) => {
+      const moduleReview = buildLearnerModuleReview(section, dashboard);
+      return `
+        <details class="learning-path-section learner-module-card" ${index === 0 ? "open" : ""}>
+          <summary class="learning-path-summary">
+            <div class="learning-path-head">
+              <div>
+                <div class="inline">
+                  <strong>${escapeHtml(section.title)}</strong>
+                  <span class="chip">${section.lessons.length} items</span>
+                  <span class="chip ${moduleReview.statusLabel === "On Track" ? "soft" : "warn"}">${escapeHtml(moduleReview.statusLabel)}</span>
+                </div>
+                <div class="meta">${escapeHtml(section.description)}</div>
               </div>
             </div>
-          `;
-        }).join("")}
-      </div>
-    </div>
-  `).join("")}
+          </summary>
+          <div class="stack learning-path-content">
+            ${section.lessons.map((lesson) => {
+              const complete = dashboard.enrollment.completed_lesson_ids.includes(lesson.id);
+              return `
+                <div class="lesson lesson-card ${complete ? "lesson-complete" : ""}">
+                  <div class="inline">
+                    <strong>${escapeHtml(lesson.title)}</strong>
+                    <span class="chip">${escapeHtml(lesson.resource_type)}</span>
+                    <span class="chip">${escapeHtml(lesson.duration_minutes)} min</span>
+                    ${complete ? `<span class="chip soft">Completed</span>` : ""}
+                  </div>
+                  <div class="meta">${escapeHtml(lesson.summary)}</div>
+                  <div class="actions">
+                    ${lesson.resource_type === "video" ? `<button class="secondary learner-open-video-btn" data-lesson="${lesson.id}">Open Video</button>` : ""}
+                    ${lesson.resource_type === "assignment" ? `<button class="secondary learner-open-assignment-btn" data-lesson="${lesson.id}">Open Assignment</button>` : ""}
+                    ${lesson.resource_type === "document" ? `<button class="secondary learner-open-lesson-btn" data-lesson="${lesson.id}">Open Lesson</button>` : ""}
+                    ${!complete ? `<button class="secondary complete-lesson-btn" data-lesson="${lesson.id}">${lesson.resource_type === "assignment" ? "Submit Assignment" : "Mark Complete"}</button>` : ""}
+                  </div>
+                </div>
+              `;
+            }).join("")}
+            <div class="card module-review-card">
+              <div class="module-review-head">
+                <div class="inline">
+                  <h3 class="section-title">Module Review</h3>
+                  <span class="chip">${moduleReview.completedCount}/${moduleReview.lessonCount} complete</span>
+                  <span class="chip ${moduleReview.statusLabel === "On Track" ? "soft" : "warn"}">${escapeHtml(moduleReview.completionPercentage)}%</span>
+                </div>
+                <div class="meta">Review this module’s progress, assessment signals, KPI observations, and improvement actions in one place.</div>
+              </div>
+              <div class="grid two compact-grid module-review-grid">
+                <div class="spotlight">
+                  <strong>Progress in this module</strong>
+                  <div class="meta">${moduleReview.completedCount} of ${moduleReview.lessonCount} items completed in ${escapeHtml(section.title)}.</div>
+                  <div class="meta">${moduleReview.sectionSkillNames.length ? `Skills covered: ${escapeHtml(moduleReview.sectionSkillNames.join(", "))}` : "No linked skills on this module yet."}</div>
+                </div>
+                <div class="spotlight">
+                  <strong>Assessment and KPI signals</strong>
+                  <div class="meta">${moduleReview.weakSkills.length ? `Weak skills here: ${escapeHtml(moduleReview.weakSkills.map((item) => item.skill_name).join(", "))}.` : "No weak skill signal mapped to this module from the latest assessment."}</div>
+                  <div class="meta">${moduleReview.weakKpis.length ? `KPI risk areas here: ${escapeHtml(moduleReview.weakKpis.map((item) => item.kpi_name).join(", "))}.` : "No KPI risk area currently mapped to this module."}</div>
+                </div>
+              </div>
+              <div class="grid two compact-grid module-review-grid">
+                <div class="spotlight">
+                  <strong>KPI review for this module</strong>
+                  <div class="meta">${moduleReview.relatedObservations.length ? moduleReview.relatedObservations.slice(0, 2).map((item) => `${item.kpi_name}: ${item.status}`).join(" · ") : "No KPI observations recorded yet for this module."}</div>
+                </div>
+                <div class="spotlight">
+                  <strong>Improvement plan</strong>
+                  <div class="meta">${moduleReview.relatedPlans.length ? moduleReview.relatedPlans.filter((item) => item.status === "assigned").map((item) => item.title).join(", ") || "Improvement plans for this module are resolved." : "No active improvement plan for this module."}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+      `;
+    }).join("")}
   `;
 
   attachLearnerCourseHandlers(dashboard);
-}
-
-function renderLearnerReview(dashboard) {
-  learnerReviewSummary.innerHTML = `
-    <div class="card">
-      <span class="meta">Completion</span>
-      <strong class="summary-value">${dashboard.metrics.completion_percentage}%</strong>
-      <div class="meta">${dashboard.metrics.lessons_completed}/${dashboard.metrics.total_lessons} lessons completed</div>
-    </div>
-    <div class="card">
-      <span class="meta">Assessment</span>
-      <strong class="summary-value">${dashboard.metrics.latest_assessment_score ?? "--"}</strong>
-      <div class="meta">${dashboard.metrics.weak_skill_count} weak skills · ${dashboard.metrics.weak_kpis} weak KPIs</div>
-    </div>
-  `;
-  renderAssessmentResult(dashboard.latest_assessment);
-  renderKpiView(dashboard);
-}
-
-function renderAssessmentResult(attempt) {
-  if (!attempt) {
-    assessmentResult.innerHTML = `<div class="empty">No assessment submitted yet.</div>`;
-    return;
-  }
-  assessmentResult.innerHTML = `
-    <div class="card">
-      <div class="inline">
-        <strong>Score ${attempt.score_percentage}%</strong>
-        <span class="chip ${attempt.passed ? "soft" : "warn"}">${attempt.passed ? "Passed" : "Needs Work"}</span>
-      </div>
-      <div class="meta">${escapeHtml(attempt.analysis_summary)}</div>
-    </div>
-    <div class="split-two">
-      <div class="card">
-        <h3 class="section-title">Weak Skills</h3>
-        ${attempt.weak_skills.length ? attempt.weak_skills.map((item) => `<div class="meta">${escapeHtml(item.skill_name)} · ${item.accuracy}%</div>`).join("") : `<div class="meta">No weak skills in this attempt.</div>`}
-      </div>
-      <div class="card">
-        <h3 class="section-title">KPI Risk Areas</h3>
-        ${attempt.weak_kpis.length ? attempt.weak_kpis.map((item) => `<div class="meta">${escapeHtml(item.kpi_name)} · ${item.accuracy}%</div>`).join("") : `<div class="meta">No KPI risk areas in this attempt.</div>`}
-      </div>
-    </div>
-    ${attempt.question_results?.length ? `
-      <div class="card">
-        <h3 class="section-title">Question Review</h3>
-        <div class="stack">
-          ${attempt.question_results.map((item, index) => `
-            <div class="spotlight">
-              <div class="inline">
-                <strong>Q${index + 1}</strong>
-                <span class="chip ${item.is_correct ? "soft" : "warn"}">${item.is_correct ? "Correct" : "Incorrect"}</span>
-              </div>
-              <div class="meta">${escapeHtml(item.prompt)}</div>
-              <div class="meta">${escapeHtml(item.explanation)}</div>
-            </div>
-          `).join("")}
-        </div>
-      </div>
-    ` : ""}
-  `;
-}
-
-function renderKpiView(dashboard) {
-  const observations = dashboard.kpi_observations || [];
-  const assignments = dashboard.remediation_assignments || [];
-  kpiView.innerHTML = `
-    <div class="grid two">
-      <div class="card">
-        <h3 class="section-title">KPI Observations</h3>
-        ${observations.length ? observations.map((item) => `
-          <div class="spotlight">
-            <div class="inline">
-              <strong>${escapeHtml(item.kpi_name)}</strong>
-              <span class="chip ${statusTone(item.status)}">${escapeHtml(titleCaseLabel(item.status))}</span>
-            </div>
-            <div class="meta">${item.value} / ${item.target_value} · ${escapeHtml(item.period_label)}</div>
-            ${item.notes ? `<div class="meta">${escapeHtml(item.notes)}</div>` : ""}
-          </div>
-        `).join("") : `<div class="meta">No KPI observations yet.</div>`}
-      </div>
-      <div class="card">
-        <h3 class="section-title">Improvement Plan</h3>
-        ${assignments.length ? assignments.map((item) => `
-          <div class="spotlight">
-            <div class="inline">
-              <strong>${escapeHtml(item.title)}</strong>
-              <span class="chip ${statusTone(item.status)}">${escapeHtml(titleCaseLabel(item.status))}</span>
-            </div>
-            <div class="meta">${escapeHtml(item.summary)}</div>
-          </div>
-        `).join("") : `<div class="meta">No remediation assignments yet.</div>`}
-      </div>
-    </div>
-  `;
 }
 
 function attachLearnerCourseHandlers(dashboard) {
@@ -1162,7 +1095,6 @@ function attachLearnerCourseHandlers(dashboard) {
       try {
         await fetchJson("/api/my/assessment/submit", { method: "POST", body: JSON.stringify({ answers }) });
         state.learnerCourseView = { mode: "overview", lessonId: null };
-        setSubtab("learner", "learner-review");
         await refreshLearnerData();
       } catch (error) {
         alert(error.message);
@@ -1185,7 +1117,6 @@ function attachLearnerCourseHandlers(dashboard) {
       try {
         await fetchJson("/api/my/kpis", { method: "POST", body: JSON.stringify(payload) });
         state.learnerCourseView = { mode: "overview", lessonId: null };
-        setSubtab("learner", "learner-review");
         await refreshLearnerData();
       } catch (error) {
         alert(error.message);
@@ -1208,7 +1139,6 @@ function attachLearnerCourseHandlers(dashboard) {
       try {
         await fetchJson(`/api/my/assignments/${lessonId}/submit`, { method: "POST", body: JSON.stringify({ responses }) });
         state.learnerCourseView = { mode: "overview", lessonId: null };
-        setSubtab("learner", "learner-review");
         await refreshLearnerData();
       } catch (error) {
         alert(error.message);
@@ -1733,8 +1663,6 @@ verifyCodeForm.addEventListener("submit", async (event) => {
     state.currentUser = res.item.user;
     if (state.currentUser.user_type === "trainer") {
       setSubtab("admin", "trainer-role-input");
-    } else {
-      setSubtab("learner", "learner-course");
     }
     verifyCodeResult.innerHTML = "";
     await bootWorkspace();
@@ -1826,9 +1754,6 @@ learnerForm.addEventListener("submit", async (event) => {
 });
 
 closeLessonPlayerBtn.addEventListener("click", closeLessonPlayer);
-learnerReviewBackBtn.addEventListener("click", () => {
-  setSubtab("learner", "learner-course");
-});
 lessonPlayerModal.addEventListener("click", (event) => {
   if (event.target.dataset.closeModal === "true") {
     closeLessonPlayer();
