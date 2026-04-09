@@ -735,10 +735,18 @@ function renderKpiStudio() {
     return;
   }
 
-  kpiStudioList.innerHTML = items.map((item) => {
-    const latestVersion = item.video_versions[item.video_versions.length - 1];
-    const status = item.published ? "approved" : latestVersion ? latestVersion.status : item.studio_status;
-    return `
+  kpiStudioList.innerHTML = `
+    <div class="card">
+      <div class="inline">
+        <strong>KPI Queue</strong>
+        <span class="chip">${items.length} items</span>
+      </div>
+      <div class="meta">Pick a KPI to review the current version, request changes, or approve the final video.</div>
+    </div>
+    ${items.map((item) => {
+      const latestVersion = item.video_versions[item.video_versions.length - 1];
+      const status = item.published ? "approved" : latestVersion ? latestVersion.status : item.studio_status;
+      return `
       <div class="card role-card-clickable studio-item-card ${item.id === state.kpiStudio.activeItemId ? "is-active" : ""}" data-studio-item="${item.id}">
         <div class="inline">
           <strong>${escapeHtml(item.kpi_name)}</strong>
@@ -752,7 +760,8 @@ function renderKpiStudio() {
         </div>
       </div>
     `;
-  }).join("");
+    }).join("")}
+  `;
 
   if (!activeItem) {
     kpiStudioDetail.innerHTML = `<div class="empty">Select a KPI to review its training video.</div>`;
@@ -791,7 +800,8 @@ function renderKpiStudio() {
   kpiStudioDetail.innerHTML = `
     <div class="card">
       <div class="inline">
-        <strong>${escapeHtml(activeItem.kpi_name)}</strong>
+        <strong>Selected KPI</strong>
+        <span class="chip">${escapeHtml(activeItem.kpi_name)}</span>
         <span class="chip">${escapeHtml(activeItem.category)}</span>
         ${activeItem.published ? `<span class="chip soft">Approved</span>` : ""}
       </div>
@@ -802,7 +812,8 @@ function renderKpiStudio() {
     ${activeVersion ? `
       <div class="card">
         <div class="inline">
-          <strong>Version ${escapeHtml(activeVersion.version_number)}</strong>
+          <strong>Video Review</strong>
+          <span class="chip">Version ${escapeHtml(activeVersion.version_number)}</span>
           <span class="chip ${statusTone(activeVersion.status)}">${escapeHtml(titleCaseLabel(activeVersion.status))}</span>
           <span class="chip">${escapeHtml(activeVersion.generation_job.provider)}</span>
         </div>
