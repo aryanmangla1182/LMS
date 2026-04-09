@@ -417,8 +417,8 @@ body {
   font-size: 1rem;
 }
 
-.review-path-card[open] .learning-path-summary::after,
-.learner-module-card[open] .learning-path-summary::after {
+.review-path-card[open] > .learning-path-summary::after,
+.learner-module-card[open] > .learning-path-summary::after {
   content: "−";
 }
 
@@ -855,12 +855,35 @@ button:disabled {
 
 .studio-layout {
   align-items: start;
+  gap: 16px;
+}
+
+.studio-summary-card,
+.studio-queue-head,
+.studio-detail-card,
+.studio-feedback-form,
+.studio-item-card {
+  display: grid;
+  gap: 12px;
 }
 
 .studio-item-card.is-active,
 .studio-version-active {
   border-color: #99f6e4;
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+}
+
+.studio-item-card {
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+}
+
+.studio-item-locked .learning-path-summary {
+  cursor: not-allowed;
+}
+
+.studio-item-locked .learning-path-summary::after {
+  background: #f8fafc;
+  color: var(--muted);
 }
 
 .studio-video-player {

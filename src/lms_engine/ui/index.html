@@ -171,33 +171,25 @@ Conv|CONVERSION|30|%|0.85</textarea></label>
             </div>
             <div class="review-layout">
               <div id="role-status" class="empty">No role selected for review yet.</div>
-              <label class="review-box">Review Suggestions<textarea id="review-note" rows="4" placeholder="Add change requests before approval."></textarea></label>
-              <div class="actions review-actions">
-                <button id="apply-review-btn" class="secondary" disabled>Apply Review</button>
-                <button id="publish-role-btn" class="primary" disabled>Approve & Create Course</button>
-              </div>
               <div id="role-detail" class="stack role-detail-stack"></div>
-              <div class="review-kpi-shell">
-                <div class="panel-head">
+              <section id="review-kpi-section" class="review-kpi-shell review-stage review-stage-box">
+                <div class="review-stage-head">
                   <div>
-                    <p class="eyebrow">KPI Review</p>
-                    <h2>KPI Video Review And Approval</h2>
+                    <p class="eyebrow">2. Learning Path</p>
+                    <h3>Learner Course Preview</h3>
                   </div>
+                  <p class="meta">Review KPI and skill videos, approve learner-facing versions, and generate quizzes from here.</p>
                 </div>
                 <div id="kpi-studio-summary" class="stack"></div>
-                <div class="split-two studio-layout">
-                  <div id="kpi-studio-list" class="stack"></div>
-                  <div id="kpi-studio-detail" class="stack"></div>
-                </div>
-              </div>
-              <div id="role-detail" class="stack role-detail-stack"></div>
+                <div id="kpi-studio-list" class="stack"></div>
+              </section>
               <section id="review-input-section" class="review-box">
                 <div class="review-box-head">
                   <div>
                     <p class="eyebrow">3. Review Input</p>
                     <h3>Review Notes And Approval</h3>
                   </div>
-                  <p class="meta">Capture reviewer suggestions here, then approve once the role input and learning path look right.</p>
+                  <p class="meta">Capture reviewer suggestions here, then approve once the role input and learner course preview look right.</p>
                 </div>
                 <div id="role-review-history" class="stack review-history-list"></div>
                 <label>

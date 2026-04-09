@@ -88,13 +88,13 @@ class KPIStudioService:
         return self.list_items()
 
     def list_items(self) -> List[KPIStudioItem]:
-        return list(self._items.values())
+        return [self._sync_item_state(item) for item in self._items.values()]
 
     def get_item(self, item_id: str) -> KPIStudioItem:
         item = self._items.get(item_id)
         if item is None:
             raise ValueError("KPI studio item not found: {0}".format(item_id))
-        return item
+        return self._sync_item_state(item)
 
     def generate_video_version(self, item_id: str, payload: Dict[str, Any]) -> VideoVersion:
         item = self.get_item(item_id)
@@ -150,6 +150,12 @@ class KPIStudioService:
         item.video_versions.append(version)
         item.video_versions = item.video_versions[-3:]
         item.studio_status = KPIStudioStatus.REVIEW
+        if status == VideoVersionStatus.COMPLETED:
+            item.final_version_id = version.id
+            item.quiz = self._build_quiz(item, version)
+        else:
+            item.final_version_id = None
+            item.quiz = None
         item.published = False
         return version
 
@@ -172,6 +178,29 @@ class KPIStudioService:
         for version in item.video_versions:
             if version.status == VideoVersionStatus.APPROVED:
                 version.status = VideoVersionStatus.COMPLETED
+        return item
+
+    def _sync_item_state(self, item: KPIStudioItem) -> KPIStudioItem:
+        latest_ready_version = next(
+            (version for version in reversed(item.video_versions) if version.status in {VideoVersionStatus.COMPLETED, VideoVersionStatus.APPROVED}),
+            None,
+        )
+        if latest_ready_version is None:
+            item.final_version_id = None
+            item.quiz = None
+            item.studio_status = KPIStudioStatus.DRAFT if not item.video_versions else KPIStudioStatus.REVIEW
+            item.published = False
+            return item
+
+        item.final_version_id = latest_ready_version.id
+        if item.quiz is None or item.quiz.video_version_id != latest_ready_version.id:
+            item.quiz = self._build_quiz(item, latest_ready_version)
+        if latest_ready_version.status == VideoVersionStatus.APPROVED:
+            item.studio_status = KPIStudioStatus.APPROVED
+            item.published = True
+        else:
+            item.studio_status = KPIStudioStatus.REVIEW
+            item.published = False
         return item
 
     def fetch_video_bytes(self, asset_id: str) -> tuple[str, bytes]:

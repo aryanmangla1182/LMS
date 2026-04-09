@@ -55,18 +55,14 @@ class KPIStudioTestCase(unittest.TestCase):
         self.assertEqual(version_two.id, item.video_versions[0].id)
         self.assertEqual(version_four.id, item.video_versions[-1].id)
 
-    def test_approval_auto_publishes_and_generates_quiz(self) -> None:
+    def test_completed_video_auto_generates_quiz(self) -> None:
         version = self.container.kpi_studio.generate_video_version(self.item.id, {"role_name": self.role_name})
 
-        item_before = self.container.kpi_studio.get_item(self.item.id)
-        self.assertIsNone(item_before.quiz)
-        self.assertFalse(item_before.published)
-
-        approved = self.container.kpi_studio.approve_version(self.item.id, version.id)
-        self.assertEqual(approved.final_version_id, version.id)
-        self.assertIsNotNone(approved.quiz)
-        self.assertEqual(len(approved.quiz.questions), 10)
-        self.assertTrue(approved.published)
+        item = self.container.kpi_studio.get_item(self.item.id)
+        self.assertEqual(item.final_version_id, version.id)
+        self.assertIsNotNone(item.quiz)
+        self.assertEqual(len(item.quiz.questions), 10)
+        self.assertFalse(item.published)
 
     def test_reopen_requires_new_finalization_cycle(self) -> None:
         version = self.container.kpi_studio.generate_video_version(self.item.id, {"role_name": self.role_name})
@@ -86,20 +82,23 @@ class KPIStudioTestCase(unittest.TestCase):
             {"role_name": self.role_name, "revision_prompt": "Make it more actionable"},
         )
         version_id = version_response["item"]["id"]
-
-        approve_response = route_request(
-            self.container,
-            "POST",
-            "/studio/kpis/{0}/versions/{1}/approve".format(self.item.id, version_id),
-            {},
-            {},
-        )
         item_response = route_request(self.container, "GET", "/studio/kpis/{0}".format(self.item.id), {}, None)
 
-        self.assertEqual(approve_response["item"]["final_version_id"], version_id)
+        self.assertEqual(item_response["item"]["final_version_id"], version_id)
         self.assertEqual(len(item_response["item"]["video_versions"]), 1)
         self.assertEqual(len(item_response["item"]["quiz"]["questions"]), 10)
-        self.assertTrue(item_response["item"]["published"])
+        self.assertFalse(item_response["item"]["published"])
+
+    def test_list_items_backfills_quiz_for_existing_completed_video(self) -> None:
+        version = self.container.kpi_studio.generate_video_version(self.item.id, {"role_name": self.role_name})
+        item = self.container.kpi_studio.get_item(self.item.id)
+        item.quiz = None
+        item.final_version_id = None
+
+        refreshed = self.container.kpi_studio.list_items()[0]
+        self.assertEqual(refreshed.final_version_id, version.id)
+        self.assertIsNotNone(refreshed.quiz)
+        self.assertEqual(refreshed.quiz.video_version_id, version.id)
 
     def test_role_name_is_required_for_first_video_generation(self) -> None:
         with self.assertRaisesRegex(ValueError, "role_name is required"):
