@@ -39,6 +39,7 @@ class KPIReviewUITestCase(unittest.TestCase):
         self.assertIn('addEventListener("toggle"', script)
         self.assertIn('data-can-open', script)
         self.assertIn('openItemIds', script)
+        self.assertIn('openQuizItemIds', script)
         self.assertIn('state.kpiStudio.activeItemId = null', script)
         self.assertNotIn('|| state.kpiStudio.items[0] || null', script)
         self.assertIn('lessonCount', script)

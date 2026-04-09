@@ -24,6 +24,7 @@ const state = {
     activeItemId: null,
     activeVersionId: null,
     openItemIds: [],
+    openQuizItemIds: [],
     roleName: "",
     isGenerating: false,
     lastError: "",
@@ -841,8 +842,9 @@ function renderKpiStudio() {
           V${escapeHtml(version.version_number)} · ${escapeHtml(titleCaseLabel(version.status))}
         </button>
       `).join("");
+      const isQuizOpen = Boolean(item.quiz && state.kpiStudio.openQuizItemIds.includes(item.id));
       const quizMarkup = item.quiz ? `
-        <details class="learning-path-section review-path-card studio-detail-card">
+        <details class="learning-path-section review-path-card studio-detail-card studio-quiz-card" data-quiz-item="${item.id}" ${isQuizOpen ? "open" : ""}>
           <summary class="learning-path-summary">
             <div class="learning-path-head">
               <div>
@@ -968,6 +970,21 @@ function renderKpiStudio() {
       renderKpiStudio();
     });
   });
+  document.querySelectorAll(".studio-quiz-card").forEach((card) => {
+    card.addEventListener("toggle", () => {
+      const itemId = card.dataset.quizItem;
+      if (!itemId) {
+        return;
+      }
+      if (card.open) {
+        if (!state.kpiStudio.openQuizItemIds.includes(itemId)) {
+          state.kpiStudio.openQuizItemIds = [...state.kpiStudio.openQuizItemIds, itemId];
+        }
+        return;
+      }
+      state.kpiStudio.openQuizItemIds = state.kpiStudio.openQuizItemIds.filter((openId) => openId !== itemId);
+    });
+  });
 }
 
 async function refreshKpiStudio() {
@@ -975,6 +992,9 @@ async function refreshKpiStudio() {
   state.kpiStudio.items = res.items;
   state.kpiStudio.openItemIds = state.kpiStudio.openItemIds.filter((itemId) =>
     state.kpiStudio.items.some((item) => item.id === itemId && (item.video_versions || []).length > 0)
+  );
+  state.kpiStudio.openQuizItemIds = state.kpiStudio.openQuizItemIds.filter((itemId) =>
+    state.kpiStudio.items.some((item) => item.id === itemId && item.quiz?.questions?.length)
   );
   if (!state.kpiStudio.activeItemId || !state.kpiStudio.items.some((item) => item.id === state.kpiStudio.activeItemId)) {
     state.kpiStudio.activeItemId = null;
@@ -1042,6 +1062,7 @@ async function generateStudioCourse() {
     state.kpiStudio.activeItemId = null;
     state.kpiStudio.activeVersionId = null;
     state.kpiStudio.openItemIds = [];
+    state.kpiStudio.openQuizItemIds = [];
     if (failedItems.length) {
       state.kpiStudio.lastError = `Some items could not be updated: ${failedItems.join(" | ")}`;
     }
@@ -2012,6 +2033,7 @@ roleForm.addEventListener("submit", async (event) => {
     state.kpiStudio.activeItemId = null;
     state.kpiStudio.activeVersionId = null;
     state.kpiStudio.openItemIds = [];
+    state.kpiStudio.openQuizItemIds = [];
     state.kpiStudio.lastError = "";
     setSubtab("admin", "trainer-review");
     await refreshTrainerData();
