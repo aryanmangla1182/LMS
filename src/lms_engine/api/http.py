@@ -223,6 +223,12 @@ def route_request(
     if method == "GET" and path == "/api/my/dashboard":
         return {"item": engine.get_my_dashboard(token)}
 
+    if method == "GET" and path == "/api/my/pitches":
+        return {"items": engine.list_my_pitch_sessions(token)}
+
+    if method == "POST" and path == "/api/my/pitches/analyze":
+        return {"item": engine.analyze_my_pitch(token, payload or {})}
+
     if path.startswith("/api/my/lessons/") and path.endswith("/complete") and method == "POST":
         lesson_id = path[len("/api/my/lessons/") : -len("/complete")].rstrip("/")
         return {"item": engine.complete_my_lesson(token, lesson_id)}
