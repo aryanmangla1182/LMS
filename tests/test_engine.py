@@ -14,6 +14,18 @@ from lms_engine.application.mvp import AuthorizationError, LMSEngineService
 from lms_engine.storage import AssetStore, JsonStore
 
 
+class FakeSpeechClient:
+    enabled = True
+
+    def transcribe_audio(self, audio_bytes, filename, mime_type, language_code="en"):
+        return {
+            "text": audio_bytes.decode("utf-8"),
+            "model_id": "fake_speech",
+            "source": "test",
+            "raw": {"filename": filename, "mime_type": mime_type, "language_code": language_code},
+        }
+
+
 class LMSEngineMVPTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -23,6 +35,7 @@ class LMSEngineMVPTestCase(unittest.TestCase):
             store=JsonStore(store_path),
             asset_store=AssetStore(asset_path),
             generator=AIContentGenerator(),
+            speech_client=FakeSpeechClient(),
         )
         trainer_code = self.service.request_login_code({"phone_number": self.service.default_trainer_phone})["code"]
         trainer_login = self.service.verify_login_code(
@@ -273,6 +286,55 @@ class LMSEngineMVPTestCase(unittest.TestCase):
         trainer = self.service.get_current_user(self.trainer_token)
         self.assertEqual(trainer["user_type"], "trainer")
         self.assertEqual(created["user"]["user_type"], "learner")
+
+    def test_learner_pitch_analysis_is_persisted_and_visible_in_dashboards(self) -> None:
+        role = self.service.generate_role_blueprint(
+            {
+                "segment": "Retail",
+                "title": "Store Manager",
+                "level": "",
+                "legacy_mappings": [],
+                "work_summary": "Owns store performance.",
+                "responsibilities": [
+                    "Serve customers confidently",
+                    "Understand needs before recommending a plan",
+                    "Close with a clear next step",
+                ],
+            }
+        )
+        self.service.publish_role(role["id"])
+        created = self.service.create_user(
+            {
+                "name": "Asha",
+                "phone_number": "9000000044",
+                "role_id": role["id"],
+            }
+        )
+        code = self.service.request_login_code({"phone_number": "9000000044"})["code"]
+        learner_token = self.service.verify_login_code({"phone_number": "9000000044", "code": code})["token"]
+
+        session = self.service.analyze_my_pitch(
+            learner_token,
+            {
+                "title": "Store walk-in pitch",
+                "base64_data": "SGVsbG8sIHdlbGNvbWUgdG8gQ3VsdGZpdC4gSSB3YW50IHRvIHVuZGVyc3RhbmQgeW91ciBnb2FsLCByZWNvbW1lbmQgdGhlIHJpZ2h0IHBsYW4sIGFuZCBoZWxwIHlvdSBqb2luIHRvZGF5Lg==",
+                "extension": "txt",
+                "mime_type": "text/plain",
+            },
+        )
+
+        self.assertEqual(session["title"], "Store walk-in pitch")
+        self.assertTrue(session["transcript"])
+        self.assertIn("overall_score", session["analysis"])
+        self.assertTrue(session["audio_asset"]["url"].startswith("/media/pitch/"))
+
+        dashboard = self.service.get_my_dashboard(learner_token)
+        self.assertEqual(len(dashboard["pitch_sessions"]), 1)
+        self.assertEqual(dashboard["pitch_sessions"][0]["id"], session["id"])
+
+        trainer_dashboard = self.service.get_trainer_dashboard()
+        self.assertEqual(trainer_dashboard["summary"]["pitch_sessions"], 1)
+        self.assertTrue(trainer_dashboard["summary"]["pitch_average"] is not None)
 
 
 if __name__ == "__main__":

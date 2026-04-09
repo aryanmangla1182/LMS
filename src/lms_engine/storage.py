@@ -16,6 +16,7 @@ DEFAULT_STATE: Dict[str, Any] = {
     "enrollments": [],
     "assessment_attempts": [],
     "assignment_submissions": [],
+    "pitch_sessions": [],
     "kpi_observations": [],
     "remediation_assignments": [],
     "activity_log": [],

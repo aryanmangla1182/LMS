@@ -134,6 +134,20 @@ function formatClock(milliseconds) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const marker = "base64,";
+      const index = result.indexOf(marker);
+      resolve(index >= 0 ? result.slice(index + marker.length) : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
 function stopAllInlineVideos() {
   Object.values(state.inlineVideoPlayers || {}).forEach((player) => {
     if (player?.timer) {
@@ -837,6 +851,84 @@ function buildLearnerModuleReview(section, dashboard) {
   };
 }
 
+function renderPitchAnalyzer(dashboard) {
+  const sessions = dashboard.pitch_sessions || [];
+  const latest = sessions[0] || null;
+  return `
+    <div class="card pitch-analyzer-card">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">AI Pitch Analyzer</p>
+          <h3 class="section-title">Analyze a live sales pitch</h3>
+        </div>
+      </div>
+      <div class="meta">Upload a short pitch recording. The system will transcribe it, score it, and show what to improve next.</div>
+      <form id="pitch-analyzer-form" class="form compact-form">
+        <label>
+          Pitch Title
+          <input name="title" placeholder="Store Manager floor pitch" value="${escapeHtml(dashboard.role.title)} sales pitch">
+        </label>
+        <label>
+          Audio File
+          <input name="audio_file" type="file" accept="audio/*,.txt" required>
+        </label>
+        <button type="submit" class="primary">Analyze Pitch</button>
+      </form>
+      ${latest ? `
+        <div class="pitch-latest-result">
+          <div class="inline">
+            <strong>Latest Result</strong>
+            <span class="chip ${latest.analysis.overall_score >= 75 ? "soft" : "warn"}">${escapeHtml(latest.analysis.overall_score)} / 100</span>
+          </div>
+          <div class="meta">${escapeHtml(latest.analysis.summary)}</div>
+        </div>
+      ` : ""}
+    </div>
+    <div class="stack pitch-session-list">
+      ${(sessions.length ? sessions : []).map((session) => `
+        <details class="card pitch-session-card">
+          <summary class="pitch-session-summary">
+            <div class="inline">
+              <strong>${escapeHtml(session.title)}</strong>
+              <span class="chip ${session.analysis.overall_score >= 75 ? "soft" : "warn"}">${escapeHtml(session.analysis.overall_score)} / 100</span>
+              <span class="chip">${new Date(session.created_at).toLocaleDateString()}</span>
+            </div>
+          </summary>
+          <div class="stack learning-path-content">
+            <div class="meta">${escapeHtml(session.analysis.summary)}</div>
+            <div class="grid two compact-grid">
+              <div class="spotlight">
+                <strong>Strengths</strong>
+                <div class="meta">${(session.analysis.strengths || []).length ? escapeHtml(session.analysis.strengths.join(" ")) : "No strengths recorded yet."}</div>
+              </div>
+              <div class="spotlight">
+                <strong>Improve Next</strong>
+                <div class="meta">${(session.analysis.improvements || []).length ? escapeHtml(session.analysis.improvements.join(" ")) : "No immediate coaching point recorded."}</div>
+              </div>
+            </div>
+            <div class="card-surface">
+              <strong>Transcript</strong>
+              <div class="meta transcript-block">${escapeHtml(session.transcript || "No transcript available.")}</div>
+            </div>
+            <div class="grid two compact-grid">
+              ${(session.analysis.rubric || []).map((item) => `
+                <div class="spotlight">
+                  <div class="inline">
+                    <strong>${escapeHtml(item.category)}</strong>
+                    <span class="chip ${item.score >= 75 ? "soft" : "warn"}">${escapeHtml(item.score)}</span>
+                  </div>
+                  <div class="meta">${escapeHtml(item.reason)}</div>
+                </div>
+              `).join("")}
+            </div>
+            ${session.audio_asset?.url ? `<audio controls src="${escapeHtml(session.audio_asset.url)}" class="pitch-audio-player"></audio>` : ""}
+          </div>
+        </details>
+      `).join("") || `<div class="empty">No pitch analysis sessions yet.</div>`}
+    </div>
+  `;
+}
+
 function renderLearnerDashboard(dashboard) {
   state.learnerDashboard = dashboard;
   initializeInlineVideoPlayers(dashboard);
@@ -1034,6 +1126,18 @@ function renderLearnerCoursePage(dashboard) {
         </details>
       `;
     }).join("")}
+    <div class="card course-action-card">
+      <div class="inline">
+        <strong>Course Actions</strong>
+        <span class="chip soft">${dashboard.enrollment.course.assessment.questions.length} MCQs</span>
+      </div>
+      <div class="meta">Complete the assessment and record real KPI performance after you finish the modules.</div>
+      <div class="actions">
+        <button class="secondary learner-open-assessment-btn">Open Assessment</button>
+        <button class="secondary learner-open-kpi-btn">Record KPI</button>
+      </div>
+    </div>
+    ${renderPitchAnalyzer(dashboard)}
   `;
 
   attachLearnerCourseHandlers(dashboard);
@@ -1139,6 +1243,35 @@ function attachLearnerCourseHandlers(dashboard) {
       try {
         await fetchJson(`/api/my/assignments/${lessonId}/submit`, { method: "POST", body: JSON.stringify({ responses }) });
         state.learnerCourseView = { mode: "overview", lessonId: null };
+        await refreshLearnerData();
+      } catch (error) {
+        alert(error.message);
+      }
+    });
+  }
+
+  const pitchForm = document.getElementById("pitch-analyzer-form");
+  if (pitchForm) {
+    pitchForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const formData = new FormData(pitchForm);
+      const file = formData.get("audio_file");
+      if (!(file instanceof File) || !file.size) {
+        alert("Choose an audio file first.");
+        return;
+      }
+      try {
+        const base64Data = await readFileAsBase64(file);
+        await fetchJson("/api/my/pitches/analyze", {
+          method: "POST",
+          body: JSON.stringify({
+            title: String(formData.get("title") || "").trim(),
+            base64_data: base64Data,
+            extension: (file.name.split(".").pop() || "webm").toLowerCase(),
+            mime_type: file.type || "audio/webm",
+          }),
+        });
+        pitchForm.reset();
         await refreshLearnerData();
       } catch (error) {
         alert(error.message);
@@ -1451,6 +1584,7 @@ function renderTrainerDashboard(data) {
     .sort((a, b) => (a.latest_attempt_average || 0) - (b.latest_attempt_average || 0))[0];
   const weakestSkill = (data.weak_skills || [])[0];
   const weakestKpi = (data.weak_kpis || [])[0];
+  const weakestPitchTheme = (data.pitch_hotspots || [])[0];
   const avgLearnersPerRole = summary.roles_published ? (summary.learners || 0) / summary.roles_published : 0;
 
   trainerSummary.innerHTML = `
@@ -1527,6 +1661,13 @@ function renderTrainerDashboard(data) {
         </div>
         <span class="chip ${(summary.weak_kpi_observations ?? 0) > 0 ? "warn" : "soft"}">${escapeHtml(summary.weak_kpi_observations ?? 0)}</span>
       </div>
+      <div class="metric-row">
+        <div>
+          <strong>Pitch quality average</strong>
+          <div class="meta">Average score across analyzed learner sales pitches.</div>
+        </div>
+        <span class="chip ${((summary.pitch_average ?? 0) >= 75) ? "soft" : "warn"}">${escapeHtml(summary.pitch_average ?? "--")}</span>
+      </div>
     </div>
   `;
 
@@ -1546,6 +1687,10 @@ function renderTrainerDashboard(data) {
     <div class="spotlight">
       <strong>Most exposed KPI</strong>
       <div class="meta">${weakestKpi ? `${escapeHtml(weakestKpi.label)} is the KPI with the highest repeated weakness at ${escapeHtml(weakestKpi.count)} signals.` : "No weak KPI pattern recorded yet."}</div>
+    </div>
+    <div class="spotlight">
+      <strong>Pitch coaching theme</strong>
+      <div class="meta">${weakestPitchTheme ? `${escapeHtml(weakestPitchTheme.label)} is the most repeated weak pitch theme across analyzed sessions.` : "No pitch coaching pattern recorded yet."}</div>
     </div>
     <div class="spotlight">
       <strong>Best performing role</strong>
@@ -1571,6 +1716,10 @@ function renderTrainerDashboard(data) {
         <div class="mini-stat">
           <span class="meta">Assessment Avg</span>
           <strong>${escapeHtml(item.latest_attempt_average ?? "--")}</strong>
+        </div>
+        <div class="mini-stat">
+          <span class="meta">Pitch Avg</span>
+          <strong>${escapeHtml(item.pitch_average ?? "--")}</strong>
         </div>
         <div class="mini-stat">
           <span class="meta">Current status</span>

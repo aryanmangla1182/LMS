@@ -26,6 +26,28 @@ class AIContentGenerator:
         except Exception:
             return self._fallback_package(payload, review_note)
 
+    def analyze_sales_pitch(
+        self,
+        transcript: str,
+        role_title: str,
+        role_context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        if not transcript.strip():
+            return {
+                "overall_score": 0,
+                "summary": "No pitch transcript was available for analysis.",
+                "strengths": [],
+                "improvements": ["Record a clear pitch and retry the analyzer."],
+                "rubric": [],
+                "recommended_next_step": "Retry with a clearer opening, customer discovery, and close.",
+            }
+        if not self.enabled:
+            return self._fallback_pitch_analysis(transcript, role_title, role_context or {})
+        try:
+            return self._openai_pitch_analysis(transcript, role_title, role_context or {})
+        except Exception:
+            return self._fallback_pitch_analysis(transcript, role_title, role_context or {})
+
     def _openai_package(self, payload: Dict[str, Any], review_note: str) -> Dict[str, Any]:
         responsibilities = payload.get("responsibilities", [])
         input_skills = [item.strip() for item in payload.get("skills", []) if str(item).strip()]
@@ -99,6 +121,155 @@ class AIContentGenerator:
                 if text:
                     return text
         raise RuntimeError("No text output found in AI response")
+
+    def _openai_pitch_analysis(
+        self,
+        transcript: str,
+        role_title: str,
+        role_context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        system_prompt = (
+            "You evaluate frontline retail and service sales pitches for an internal LMS. "
+            "Return only valid JSON and score the pitch on a practical coaching rubric."
+        )
+        user_prompt = {
+            "role_title": role_title,
+            "role_context": role_context,
+            "transcript": transcript,
+            "required_schema": {
+                "overall_score": "0-100 number",
+                "summary": "short coaching summary",
+                "strengths": ["list of strengths"],
+                "improvements": ["list of improvements"],
+                "rubric": [
+                    {
+                        "category": "Opening Clarity | Need Discovery | Product Explanation | Objection Handling | Confidence And Close",
+                        "score": "0-100 number",
+                        "reason": "short reason",
+                    }
+                ],
+                "recommended_next_step": "one clear next coaching step",
+            },
+        }
+        body = {
+            "model": self.model,
+            "input": [
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": system_prompt}],
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": json.dumps(user_prompt)}],
+                },
+            ],
+            "text": {"format": {"type": "json_object"}},
+        }
+        req = request.Request(
+            "https://api.openai.com/v1/responses",
+            data=json.dumps(body).encode("utf-8"),
+            headers={
+                "Authorization": "Bearer {0}".format(self.api_key),
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with request.urlopen(req, timeout=45) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except error.HTTPError as exc:
+            raise RuntimeError(exc.read().decode("utf-8")) from exc
+        return json.loads(self._extract_output_text(data))
+
+    def _fallback_pitch_analysis(
+        self,
+        transcript: str,
+        role_title: str,
+        role_context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        normalized = transcript.lower()
+        word_count = len([word for word in transcript.split() if word.strip()])
+
+        categories = [
+            (
+                "Opening Clarity",
+                ["hello", "hi", "good", "welcome", "today", role_title.lower()],
+                "Start with a sharper opening that names the customer context and reason for the conversation.",
+            ),
+            (
+                "Need Discovery",
+                ["need", "goal", "looking", "use", "routine", "problem", "help"],
+                "Ask more discovery questions before moving into the recommendation.",
+            ),
+            (
+                "Product Explanation",
+                ["feature", "benefit", "plan", "membership", "product", "service", "because"],
+                "Explain the recommendation more clearly using benefits tied to customer needs.",
+            ),
+            (
+                "Objection Handling",
+                ["cost", "price", "budget", "concern", "issue", "worry", "understand"],
+                "Address objections more directly with empathy and one concrete response.",
+            ),
+            (
+                "Confidence And Close",
+                ["recommend", "next step", "today", "start", "signup", "book", "join", "close"],
+                "End with a clearer recommendation and call to action.",
+            ),
+        ]
+
+        rubric = []
+        improvements: List[str] = []
+        strengths: List[str] = []
+
+        for category, keywords, improvement in categories:
+            hits = sum(1 for keyword in keywords if keyword in normalized)
+            base_score = 45 + min(hits, 4) * 12
+            if word_count > 120:
+                base_score += 6
+            elif word_count < 45:
+                base_score -= 8
+            score = max(20, min(95, base_score))
+            if score >= 75:
+                strengths.append("{0} looked solid in this pitch.".format(category))
+                reason = "The transcript shows enough evidence of {0}.".format(category.lower())
+            else:
+                improvements.append(improvement)
+                reason = "The transcript does not show enough evidence of {0}.".format(category.lower())
+            rubric.append(
+                {
+                    "category": category,
+                    "score": score,
+                    "reason": reason,
+                }
+            )
+
+        if not strengths:
+            strengths.append("The learner attempted a full pitch and created enough material for coaching.")
+
+        overall_score = round(sum(item["score"] for item in rubric) / float(len(rubric)), 2)
+        lowest = min(rubric, key=lambda item: item["score"])
+
+        summary = (
+            "This pitch for the {0} role is at {1}/100. "
+            "The clearest coaching opportunity is {2}."
+        ).format(role_title, overall_score, lowest["category"].lower())
+
+        if role_context.get("kpis"):
+            improvements.append(
+                "Tie the pitch more clearly to business outcomes such as {0}.".format(
+                    ", ".join(role_context["kpis"][:2])
+                )
+            )
+
+        return {
+            "overall_score": overall_score,
+            "summary": summary,
+            "strengths": strengths[:3],
+            "improvements": improvements[:4],
+            "rubric": rubric,
+            "recommended_next_step": "Retry the pitch with extra focus on {0}.".format(lowest["category"].lower()),
+        }
 
     def _fallback_package(self, payload: Dict[str, Any], review_note: str) -> Dict[str, Any]:
         title = payload.get("title", "Role").strip() or "Role"

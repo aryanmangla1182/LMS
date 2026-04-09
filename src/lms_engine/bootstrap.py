@@ -7,6 +7,7 @@ from pathlib import Path
 
 from lms_engine.ai import AIContentGenerator
 from lms_engine.application.mvp import LMSEngineService
+from lms_engine.elevenlabs import ElevenLabsSpeechClient
 from lms_engine.storage import AssetStore, JsonStore
 
 
@@ -20,5 +21,10 @@ def build_container() -> AppContainer:
     asset_path = Path(__file__).resolve().parent / "data" / "assets"
     store = JsonStore(str(data_path))
     asset_store = AssetStore(str(asset_path))
-    engine = LMSEngineService(store=store, asset_store=asset_store, generator=AIContentGenerator())
+    engine = LMSEngineService(
+        store=store,
+        asset_store=asset_store,
+        generator=AIContentGenerator(),
+        speech_client=ElevenLabsSpeechClient(),
+    )
     return AppContainer(engine=engine)

@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from lms_engine.ai import AIContentGenerator
+from lms_engine.elevenlabs import ElevenLabsSpeechClient
 from lms_engine.storage import AssetStore, JsonStore
 
 
@@ -42,15 +43,23 @@ def make_id(prefix: str) -> str:
 @dataclass
 class AppConfig:
     ai_enabled: bool
+    speech_enabled: bool
     openai_model: str
     trainer_phone: str
 
 
 class LMSEngineService:
-    def __init__(self, store: JsonStore, asset_store: AssetStore, generator: AIContentGenerator) -> None:
+    def __init__(
+        self,
+        store: JsonStore,
+        asset_store: AssetStore,
+        generator: AIContentGenerator,
+        speech_client: Optional[ElevenLabsSpeechClient] = None,
+    ) -> None:
         self.store = store
         self.asset_store = asset_store
         self.generator = generator
+        self.speech_client = speech_client or ElevenLabsSpeechClient()
         self.default_trainer_phone = os.getenv("LMS_TRAINER_PHONE", os.getenv("LMS_OWNER_PHONE", "9999999999"))
         self.default_trainer_name = os.getenv("LMS_TRAINER_NAME", os.getenv("LMS_OWNER_NAME", "Cultfit LMS Trainer"))
         self.default_trainer_code = os.getenv("LMS_TRAINER_CODE", os.getenv("LMS_OWNER_CODE", "111111"))
@@ -59,6 +68,7 @@ class LMSEngineService:
     def get_config(self) -> AppConfig:
         return AppConfig(
             ai_enabled=self.generator.enabled,
+            speech_enabled=self.speech_client.enabled,
             openai_model=self.generator.model,
             trainer_phone=self.default_trainer_phone,
         )
@@ -73,6 +83,7 @@ class LMSEngineService:
                 "enrollments": [],
                 "assessment_attempts": [],
                 "assignment_submissions": [],
+                "pitch_sessions": [],
                 "kpi_observations": [],
                 "remediation_assignments": [],
                 "activity_log": [],
@@ -350,6 +361,11 @@ class LMSEngineService:
         enrollment = self._get_learner_enrollment(state, learner_id)
         attempts = [item for item in state["assessment_attempts"] if item["enrollment_id"] == enrollment["id"]]
         assignment_submissions = [item for item in state["assignment_submissions"] if item["enrollment_id"] == enrollment["id"]]
+        pitch_sessions = sorted(
+            [item for item in state["pitch_sessions"] if item["learner_id"] == learner_id],
+            key=lambda item: item["created_at"],
+            reverse=True,
+        )
         kpi_obs = [item for item in state["kpi_observations"] if item["learner_id"] == learner_id]
         remediation = [item for item in state["remediation_assignments"] if item["learner_id"] == learner_id]
         latest_attempt = attempts[-1] if attempts else None
@@ -377,6 +393,7 @@ class LMSEngineService:
             },
             "latest_assessment": latest_attempt,
             "assignment_submissions": assignment_submissions,
+            "pitch_sessions": pitch_sessions,
             "kpi_observations": kpi_obs,
             "remediation_assignments": remediation,
         }
@@ -582,6 +599,7 @@ class LMSEngineService:
         learners = state["learners"]
         enrollments = state["enrollments"]
         attempts = state["assessment_attempts"]
+        pitch_sessions = state["pitch_sessions"]
         observations = state["kpi_observations"]
         remediation = state["remediation_assignments"]
 
@@ -604,11 +622,17 @@ class LMSEngineService:
                 weak_skill_counter[weak["skill_name"]] += 1
 
         weak_kpi_counter = Counter(item["kpi_name"] for item in observations if item["status"] == "weak")
+        pitch_category_counter = Counter()
+        for session in pitch_sessions:
+            for rubric_item in session.get("analysis", {}).get("rubric", []):
+                if rubric_item.get("score", 0) < 70:
+                    pitch_category_counter[rubric_item.get("category", "Pitch Coaching")] += 1
         role_metrics = []
         for role in published_roles:
             role_learners = [item for item in learners if item["role_id"] == role["id"]]
             role_enrollments = [item for item in enrollments if item["role_id"] == role["id"]]
             role_attempts = [item for item in latest_attempts.values() if item["role_id"] == role["id"]] if latest_attempts else []
+            role_pitch_sessions = [item for item in pitch_sessions if item["role_id"] == role["id"]]
             completion_pct = 0.0
             completed = sum(len(item["completed_lesson_ids"]) for item in role_enrollments)
             possible = sum(sum(len(section["lessons"]) for section in item["course"]["sections"]) for item in role_enrollments)
@@ -625,6 +649,11 @@ class LMSEngineService:
                         sum(item["score_percentage"] for item in role_attempts) / float(len(role_attempts)),
                         2,
                     ) if role_attempts else None,
+                    "pitch_average": round(
+                        sum(item["analysis"]["overall_score"] for item in role_pitch_sessions) / float(len(role_pitch_sessions)),
+                        2,
+                    ) if role_pitch_sessions else None,
+                    "pitch_session_count": len(role_pitch_sessions),
                 }
             )
 
@@ -639,10 +668,16 @@ class LMSEngineService:
                 ),
                 "open_remediation_assignments": sum(1 for item in remediation if item["status"] == "assigned"),
                 "ai_enabled": self.generator.enabled,
+                "pitch_sessions": len(pitch_sessions),
+                "pitch_average": round(
+                    sum(item["analysis"]["overall_score"] for item in pitch_sessions) / float(len(pitch_sessions)),
+                    2,
+                ) if pitch_sessions else None,
             },
             "role_metrics": role_metrics,
             "weak_skills": [{"label": label, "count": count} for label, count in weak_skill_counter.most_common(6)],
             "weak_kpis": [{"label": label, "count": count} for label, count in weak_kpi_counter.most_common(6)],
+            "pitch_hotspots": [{"label": label, "count": count} for label, count in pitch_category_counter.most_common(6)],
             "activity_log": state["activity_log"][-12:][::-1],
         }
 
@@ -689,6 +724,16 @@ class LMSEngineService:
         state = self._state()
         enrollment = self._get_learner_enrollment(state, user["learner_id"])
         return self.submit_assignment(enrollment["id"], lesson_id, payload)
+
+    def analyze_my_pitch(self, token: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        user = self.require_learner(token)
+        return self.analyze_pitch_for_learner(user["learner_id"], payload)
+
+    def list_my_pitch_sessions(self, token: str) -> List[Dict[str, Any]]:
+        user = self.require_learner(token)
+        state = self._state()
+        sessions = [item for item in state["pitch_sessions"] if item["learner_id"] == user["learner_id"]]
+        return sorted(sessions, key=lambda item: item["created_at"], reverse=True)
 
     def upload_lesson_media(self, token: str, lesson_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         user = self._require_user_by_token(token)
@@ -744,6 +789,92 @@ class LMSEngineService:
         )
         self._save(state)
         return updated
+
+    def analyze_pitch_for_learner(self, learner_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        encoded = str(payload.get("base64_data", "")).strip()
+        if not encoded:
+            raise ValidationError("base64_data is required")
+
+        import base64
+
+        try:
+            audio_bytes = base64.b64decode(encoded)
+        except Exception as exc:
+            raise ValidationError("Invalid base64_data") from exc
+
+        extension = str(payload.get("extension", "webm")).strip().lower() or "webm"
+        mime_type = str(payload.get("mime_type", "audio/webm")).strip() or "audio/webm"
+        pitch_title = str(payload.get("title", "Sales Pitch Attempt")).strip() or "Sales Pitch Attempt"
+        language_code = str(payload.get("language_code", "en")).strip() or "en"
+
+        state = self._state()
+        learner = self._find_by_id(state["learners"], learner_id, "Learner")
+        role = self._find_by_id(state["roles"], learner["role_id"], "Role")
+
+        session_id = make_id("pitch")
+        audio_asset = self.asset_store.save_binary("pitch/{0}/audio.{1}".format(session_id, extension), audio_bytes)
+        transcription = self.speech_client.transcribe_audio(
+            audio_bytes=audio_bytes,
+            filename="pitch.{0}".format(extension),
+            mime_type=mime_type,
+            language_code=language_code,
+        )
+        transcript_text = str(transcription.get("text", "")).strip()
+        role_context = {
+            "segment": role["segment"],
+            "responsibilities": role["responsibilities"],
+            "skills": [item["name"] for item in role["skills"]],
+            "kpis": [item["name"] for item in role["kpis"]],
+        }
+        analysis = self.generator.analyze_sales_pitch(transcript_text, role["title"], role_context=role_context)
+        transcript_asset = self.asset_store.save_json(
+            "pitch/{0}/transcript.json".format(session_id),
+            {
+                "text": transcript_text,
+                "source": transcription.get("source"),
+                "model_id": transcription.get("model_id"),
+                "raw": transcription.get("raw"),
+            },
+        )
+        analysis_asset = self.asset_store.save_json("pitch/{0}/analysis.json".format(session_id), analysis)
+        session = {
+            "id": session_id,
+            "learner_id": learner_id,
+            "role_id": role["id"],
+            "title": pitch_title,
+            "mime_type": mime_type,
+            "audio_asset": {
+                "kind": "pitch_audio",
+                "relative_path": audio_asset["relative_path"],
+                "url": audio_asset["url"],
+            },
+            "transcript": transcript_text,
+            "transcript_asset": {
+                "kind": "pitch_transcript",
+                "relative_path": transcript_asset["relative_path"],
+                "url": transcript_asset["url"],
+            },
+            "analysis": analysis,
+            "analysis_asset": {
+                "kind": "pitch_analysis",
+                "relative_path": analysis_asset["relative_path"],
+                "url": analysis_asset["url"],
+            },
+            "created_at": now_iso(),
+        }
+        state["pitch_sessions"].append(session)
+        self._log_event(
+            state,
+            "pitch_analyzed",
+            {
+                "learner_id": learner_id,
+                "role_id": role["id"],
+                "pitch_session_id": session_id,
+                "score": analysis["overall_score"],
+            },
+        )
+        self._save(state)
+        return session
 
     def _build_role_record(
         self,
