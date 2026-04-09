@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from lms_engine.ai import AIContentGenerator
-from lms_engine.storage import JsonStore
+from lms_engine.storage import AssetStore, JsonStore
 
 
 class AppError(Exception):
@@ -43,23 +43,24 @@ def make_id(prefix: str) -> str:
 class AppConfig:
     ai_enabled: bool
     openai_model: str
-    owner_phone: str
+    trainer_phone: str
 
 
 class LMSEngineService:
-    def __init__(self, store: JsonStore, generator: AIContentGenerator) -> None:
+    def __init__(self, store: JsonStore, asset_store: AssetStore, generator: AIContentGenerator) -> None:
         self.store = store
+        self.asset_store = asset_store
         self.generator = generator
-        self.default_owner_phone = os.getenv("LMS_OWNER_PHONE", "9999999999")
-        self.default_owner_name = os.getenv("LMS_OWNER_NAME", "Cultfit LMS Owner")
-        self.default_owner_code = os.getenv("LMS_OWNER_CODE", "111111")
-        self._ensure_owner_account()
+        self.default_trainer_phone = os.getenv("LMS_TRAINER_PHONE", os.getenv("LMS_OWNER_PHONE", "9999999999"))
+        self.default_trainer_name = os.getenv("LMS_TRAINER_NAME", os.getenv("LMS_OWNER_NAME", "Cultfit LMS Trainer"))
+        self.default_trainer_code = os.getenv("LMS_TRAINER_CODE", os.getenv("LMS_OWNER_CODE", "111111"))
+        self._ensure_trainer_account()
 
     def get_config(self) -> AppConfig:
         return AppConfig(
             ai_enabled=self.generator.enabled,
             openai_model=self.generator.model,
-            owner_phone=self.default_owner_phone,
+            trainer_phone=self.default_trainer_phone,
         )
 
     def reset_and_seed_demo(self) -> Dict[str, Any]:
@@ -71,12 +72,14 @@ class LMSEngineService:
                 "sessions": [],
                 "enrollments": [],
                 "assessment_attempts": [],
+                "assignment_submissions": [],
                 "kpi_observations": [],
                 "remediation_assignments": [],
                 "activity_log": [],
+                "media_assets": [],
             }
         )
-        self._ensure_owner_account()
+        self._ensure_trainer_account()
         role = self.generate_role_blueprint(
             {
                 "segment": "Retail",
@@ -157,7 +160,7 @@ class LMSEngineService:
         phone = self._normalize_phone(payload.get("phone_number", ""))
         state = self._state()
         user = self._find_user_by_phone(state, phone)
-        code = self.default_owner_code if user["user_type"] == "owner" else "{0:06d}".format(random.randint(0, 999999))
+        code = self.default_trainer_code if self._normalized_user_type(user) == "trainer" else "{0:06d}".format(random.randint(0, 999999))
         user["login_code"] = code
         user["login_code_issued_at"] = now_iso()
         self._log_event(state, "login_code_requested", {"user_id": user["id"], "user_type": user["user_type"]})
@@ -346,6 +349,7 @@ class LMSEngineService:
         role = self._find_by_id(state["roles"], learner["role_id"], "Role")
         enrollment = self._get_learner_enrollment(state, learner_id)
         attempts = [item for item in state["assessment_attempts"] if item["enrollment_id"] == enrollment["id"]]
+        assignment_submissions = [item for item in state["assignment_submissions"] if item["enrollment_id"] == enrollment["id"]]
         kpi_obs = [item for item in state["kpi_observations"] if item["learner_id"] == learner_id]
         remediation = [item for item in state["remediation_assignments"] if item["learner_id"] == learner_id]
         latest_attempt = attempts[-1] if attempts else None
@@ -372,6 +376,7 @@ class LMSEngineService:
                 "weak_kpis": len(weak_kpis),
             },
             "latest_assessment": latest_attempt,
+            "assignment_submissions": assignment_submissions,
             "kpi_observations": kpi_obs,
             "remediation_assignments": remediation,
         }
@@ -471,6 +476,43 @@ class LMSEngineService:
         self._save(state)
         return attempt
 
+    def submit_assignment(self, enrollment_id: str, lesson_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        state = self._state()
+        enrollment = self._find_by_id(state["enrollments"], enrollment_id, "Enrollment")
+        lesson = self._find_lesson(enrollment["course"], lesson_id)
+        if lesson["resource_type"] != "assignment":
+            raise ValidationError("Assignment submission is only supported for assignment lessons")
+
+        responses = payload.get("responses", [])
+        prompts = lesson.get("assignment_prompts", [])
+        if prompts and len(responses) < len(prompts):
+            raise ValidationError("Please answer all assignment prompts")
+
+        existing = None
+        for item in state["assignment_submissions"]:
+            if item["enrollment_id"] == enrollment_id and item["lesson_id"] == lesson_id:
+                existing = item
+                break
+
+        submission = existing or {
+            "id": make_id("asub"),
+            "enrollment_id": enrollment_id,
+            "learner_id": enrollment["learner_id"],
+            "role_id": enrollment["role_id"],
+            "lesson_id": lesson_id,
+            "created_at": now_iso(),
+        }
+        submission["responses"] = responses
+        submission["submitted_at"] = now_iso()
+
+        if existing is None:
+            state["assignment_submissions"].append(submission)
+        if lesson_id not in enrollment["completed_lesson_ids"]:
+            enrollment["completed_lesson_ids"].append(lesson_id)
+        self._log_event(state, "assignment_submitted", {"enrollment_id": enrollment_id, "lesson_id": lesson_id, "submission_id": submission["id"]})
+        self._save(state)
+        return submission
+
     def record_kpi_observation(self, learner_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         state = self._state()
         learner = self._find_by_id(state["learners"], learner_id, "Learner")
@@ -534,7 +576,7 @@ class LMSEngineService:
         self._save(state)
         return {"observation": observation, "assignments": assignments}
 
-    def get_owner_dashboard(self) -> Dict[str, Any]:
+    def get_trainer_dashboard(self) -> Dict[str, Any]:
         state = self._state()
         roles = state["roles"]
         learners = state["learners"]
@@ -604,11 +646,17 @@ class LMSEngineService:
             "activity_log": state["activity_log"][-12:][::-1],
         }
 
-    def require_owner(self, token: str) -> Dict[str, Any]:
+    def require_trainer(self, token: str) -> Dict[str, Any]:
         user = self._require_user_by_token(token)
-        if user["user_type"] != "owner":
-            raise AuthorizationError("Owner access required")
+        if self._normalized_user_type(user) != "trainer":
+            raise AuthorizationError("Trainer access required")
         return user
+
+    def get_owner_dashboard(self) -> Dict[str, Any]:
+        return self.get_trainer_dashboard()
+
+    def require_owner(self, token: str) -> Dict[str, Any]:
+        return self.require_trainer(token)
 
     def require_learner(self, token: str) -> Dict[str, Any]:
         user = self._require_user_by_token(token)
@@ -635,6 +683,67 @@ class LMSEngineService:
     def record_my_kpi(self, token: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         user = self.require_learner(token)
         return self.record_kpi_observation(user["learner_id"], payload)
+
+    def submit_my_assignment(self, token: str, lesson_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        user = self.require_learner(token)
+        state = self._state()
+        enrollment = self._get_learner_enrollment(state, user["learner_id"])
+        return self.submit_assignment(enrollment["id"], lesson_id, payload)
+
+    def upload_lesson_media(self, token: str, lesson_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        user = self._require_user_by_token(token)
+        if self._normalized_user_type(user) not in {"trainer", "learner"}:
+            raise AuthorizationError("Valid session required")
+
+        encoded = str(payload.get("base64_data", "")).strip()
+        extension = str(payload.get("extension", "webm")).strip().lower() or "webm"
+        mime_type = str(payload.get("mime_type", "video/webm")).strip() or "video/webm"
+        if not encoded:
+            raise ValidationError("base64_data is required")
+
+        import base64
+
+        binary = base64.b64decode(encoded)
+        asset = self.asset_store.save_binary("video/{0}.{1}".format(lesson_id, extension), binary)
+
+        state = self._state()
+        updated = None
+        for role in state["roles"]:
+            for section in role["course_template"]["sections"]:
+                for lesson in section["lessons"]:
+                    if lesson["id"] == lesson_id:
+                        lesson["media_asset"] = {
+                            "kind": "video",
+                            "mime_type": mime_type,
+                            "relative_path": asset["relative_path"],
+                            "url": asset["url"],
+                            "stored_at": now_iso(),
+                        }
+                        updated = lesson["media_asset"]
+            for enrollment in state["enrollments"]:
+                if enrollment["role_id"] != role["id"]:
+                    continue
+                for section in enrollment["course"]["sections"]:
+                    for lesson in section["lessons"]:
+                        if lesson["id"] == lesson_id:
+                            lesson["media_asset"] = deepcopy(updated) if updated else lesson.get("media_asset")
+
+        if updated is None:
+            raise NotFoundError("Lesson not found: {0}".format(lesson_id))
+
+        state["media_assets"].append(
+            {
+                "id": make_id("asset"),
+                "lesson_id": lesson_id,
+                "kind": "video",
+                "mime_type": mime_type,
+                "relative_path": asset["relative_path"],
+                "url": asset["url"],
+                "created_at": now_iso(),
+            }
+        )
+        self._save(state)
+        return updated
 
     def _build_role_record(
         self,
@@ -713,6 +822,10 @@ class LMSEngineService:
             lessons = []
             for lesson in section.get("lessons", []):
                 lesson_id = make_id("lesson")
+                content_asset = self.asset_store.save_text(
+                    "lesson/{0}.md".format(lesson_id),
+                    lesson.get("content", "").strip(),
+                )
                 lesson_record = {
                     "id": lesson_id,
                     "title": lesson.get("title", "").strip(),
@@ -722,7 +835,34 @@ class LMSEngineService:
                     "duration_minutes": int(lesson.get("duration_minutes", 10)),
                     "skill_ids": [skill_lookup[name.lower()] for name in lesson.get("skill_names", []) if name.lower() in skill_lookup],
                     "kpi_ids": [kpi_lookup[name.lower()] for name in lesson.get("kpi_names", []) if name.lower() in kpi_lookup],
+                    "content_asset": {
+                        "kind": "lesson_content",
+                        "relative_path": content_asset["relative_path"],
+                        "url": content_asset["url"],
+                    },
                 }
+                if lesson_record["resource_type"] == "video":
+                    storyboard_asset = self.asset_store.save_json(
+                        "storyboard/{0}.json".format(lesson_id),
+                        {
+                            "title": lesson_record["title"],
+                            "summary": lesson_record["summary"],
+                            "content": lesson_record["content"],
+                            "duration_minutes": lesson_record["duration_minutes"],
+                        },
+                    )
+                    lesson_record["media_asset"] = {
+                        "kind": "video_storyboard",
+                        "relative_path": storyboard_asset["relative_path"],
+                        "url": storyboard_asset["url"],
+                        "status": "pending_video_upload",
+                    }
+                if lesson_record["resource_type"] == "assignment":
+                    lesson_record["assignment_prompts"] = self._build_assignment_prompts(
+                        lesson_record["title"],
+                        lesson_record["summary"],
+                        lesson_record["content"],
+                    )
                 lessons.append(lesson_record)
                 lesson_map[lesson_record["title"].lower()] = lesson_id
             course_sections.append(
@@ -748,6 +888,13 @@ class LMSEngineService:
                     "kpi_ids": [kpi_lookup[name.lower()] for name in question.get("kpi_names", []) if name.lower() in kpi_lookup],
                 }
             )
+        assessment_asset = self.asset_store.save_json(
+            "assessment/{0}.json".format(role_id),
+            {
+                "title": package.get("assessment", {}).get("title", "Role Mastery Check"),
+                "questions": questions,
+            },
+        )
 
         remediation_catalog = []
         for item in package.get("remediation_paths", []):
@@ -791,8 +938,13 @@ class LMSEngineService:
                 "assessment": {
                     "id": make_id("assessment"),
                     "title": package.get("assessment", {}).get("title", "Role Mastery Check"),
-                    "passing_score": 70,
+                    "passing_score": int(package.get("assessment", {}).get("passing_score", 70)),
                     "questions": questions,
+                    "content_asset": {
+                        "kind": "assessment_bank",
+                        "relative_path": assessment_asset["relative_path"],
+                        "url": assessment_asset["url"],
+                    },
                 },
             },
             "remediation_catalog": remediation_catalog,
@@ -849,6 +1001,34 @@ class LMSEngineService:
                     return lesson
         raise NotFoundError("Lesson not found: {0}".format(lesson_id))
 
+    def _build_assignment_prompts(self, title: str, summary: str, content: str) -> List[Dict[str, str]]:
+        prompts = []
+        lines = [line.strip("- ").strip() for line in str(content).splitlines() if line.strip()]
+        focus_lines = [line for line in lines if len(line) > 12][:3]
+        for index, line in enumerate(focus_lines[:2], start=1):
+            prompts.append(
+                {
+                    "id": make_id("aprompt"),
+                    "prompt": "Prompt {0}: {1}".format(index, line),
+                    "expected_response": "Describe the concrete action you will take for this point.",
+                }
+            )
+        prompts.append(
+            {
+                "id": make_id("aprompt"),
+                "prompt": "What action will you apply from {0} in the next operating cycle?".format(title),
+                "expected_response": summary or "Explain the action, owner, and timing.",
+            }
+        )
+        prompts.append(
+            {
+                "id": make_id("aprompt"),
+                "prompt": "How will you know this assignment worked on the floor?",
+                "expected_response": "Mention the KPI, behaviour change, or observation you will track.",
+            }
+        )
+        return prompts[:3]
+
     def _find_skill(self, role_snapshot: Dict[str, Any], skill_id: str) -> Dict[str, Any]:
         for skill in role_snapshot["skills"]:
             if skill["id"] == skill_id:
@@ -874,7 +1054,7 @@ class LMSEngineService:
         return None
 
     def _state(self) -> Dict[str, Any]:
-        self._ensure_owner_account()
+        self._ensure_trainer_account()
         return self.store.load()
 
     def _save(self, state: Dict[str, Any]) -> None:
@@ -920,7 +1100,7 @@ class LMSEngineService:
             "id": user["id"],
             "name": user["name"],
             "phone_number": user["phone_number"],
-            "user_type": user["user_type"],
+            "user_type": self._normalized_user_type(user),
             "learner_id": user.get("learner_id"),
             "role_id": user.get("role_id"),
             "last_login_at": user.get("last_login_at"),
@@ -932,33 +1112,52 @@ class LMSEngineService:
             raise ValidationError("phone_number must have at least 10 digits")
         return phone
 
-    def _ensure_owner_account(self) -> None:
+    def _ensure_trainer_account(self) -> None:
         state = self.store.load()
         for user in state.get("users", []):
-            if user.get("user_type") == "owner":
+            if user.get("user_type") == "trainer":
                 return
-        owner = {
+            if user.get("user_type") == "owner":
+                user["user_type"] = "trainer"
+                if not user.get("name"):
+                    user["name"] = self.default_trainer_name
+                state["activity_log"].append(
+                    {
+                        "id": make_id("evt"),
+                        "type": "trainer_migrated",
+                        "payload": {"user_id": user["id"], "phone_number": user["phone_number"]},
+                        "created_at": now_iso(),
+                    }
+                )
+                self.store.save(state)
+                return
+        trainer = {
             "id": make_id("usr"),
-            "name": self.default_owner_name,
-            "phone_number": self._normalize_phone(self.default_owner_phone),
-            "user_type": "owner",
+            "name": self.default_trainer_name,
+            "phone_number": self._normalize_phone(self.default_trainer_phone),
+            "user_type": "trainer",
             "learner_id": None,
             "role_id": None,
             "created_at": now_iso(),
-            "login_code": self.default_owner_code,
+            "login_code": self.default_trainer_code,
             "login_code_issued_at": now_iso(),
             "last_login_at": None,
         }
-        state["users"].append(owner)
+        state["users"].append(trainer)
         state["activity_log"].append(
             {
                 "id": make_id("evt"),
-                "type": "owner_seeded",
-                "payload": {"user_id": owner["id"], "phone_number": owner["phone_number"]},
+                "type": "trainer_seeded",
+                "payload": {"user_id": trainer["id"], "phone_number": trainer["phone_number"]},
                 "created_at": now_iso(),
             }
         )
         self.store.save(state)
+
+    def _normalized_user_type(self, user: Dict[str, Any]) -> str:
+        if user.get("user_type") == "owner":
+            return "trainer"
+        return user.get("user_type", "")
 
     def _latest_attempts_by_enrollment(self, attempts: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         latest = {}

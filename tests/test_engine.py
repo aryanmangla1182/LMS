@@ -11,25 +11,30 @@ if SRC_PATH not in sys.path:
 
 from lms_engine.ai import AIContentGenerator
 from lms_engine.application.mvp import AuthorizationError, LMSEngineService
-from lms_engine.storage import JsonStore
+from lms_engine.storage import AssetStore, JsonStore
 
 
 class LMSEngineMVPTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         store_path = os.path.join(self.temp_dir.name, "state.json")
-        self.service = LMSEngineService(store=JsonStore(store_path), generator=AIContentGenerator())
-        owner_code = self.service.request_login_code({"phone_number": self.service.default_owner_phone})["code"]
-        owner_login = self.service.verify_login_code(
-            {"phone_number": self.service.default_owner_phone, "code": owner_code}
+        asset_path = os.path.join(self.temp_dir.name, "assets")
+        self.service = LMSEngineService(
+            store=JsonStore(store_path),
+            asset_store=AssetStore(asset_path),
+            generator=AIContentGenerator(),
         )
-        self.owner_token = owner_login["token"]
+        trainer_code = self.service.request_login_code({"phone_number": self.service.default_trainer_phone})["code"]
+        trainer_login = self.service.verify_login_code(
+            {"phone_number": self.service.default_trainer_phone, "code": trainer_code}
+        )
+        self.trainer_token = trainer_login["token"]
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    def test_owner_can_generate_publish_role_and_create_phone_user(self) -> None:
-        self.service.require_owner(self.owner_token)
+    def test_trainer_can_generate_publish_role_and_create_phone_user(self) -> None:
+        self.service.require_trainer(self.trainer_token)
 
         role = self.service.generate_role_blueprint(
             {
@@ -62,7 +67,7 @@ class LMSEngineMVPTestCase(unittest.TestCase):
         self.assertEqual(created["user"]["user_type"], "learner")
         self.assertEqual(created["learner"]["phone_number"], "9000000011")
 
-    def test_review_preserves_owner_defined_skills_and_kpis(self) -> None:
+    def test_review_preserves_trainer_defined_skills_and_kpis(self) -> None:
         role = self.service.generate_role_blueprint(
             {
                 "segment": "Retail",
@@ -126,6 +131,18 @@ class LMSEngineMVPTestCase(unittest.TestCase):
             ],
         )
         self.assertEqual([item["name"] for item in reviewed["kpis"]], ["UPT", "ATV", "ASP", "Conv"])
+        self.assertGreaterEqual(len(reviewed["course_template"]["assessment"]["questions"]), 8)
+        total_lessons = sum(len(section["lessons"]) for section in reviewed["course_template"]["sections"])
+        self.assertGreaterEqual(total_lessons, 9)
+        video_lessons = [
+            lesson
+            for section in reviewed["course_template"]["sections"]
+            for lesson in section["lessons"]
+            if lesson["resource_type"] == "video"
+        ]
+        self.assertGreaterEqual(len(video_lessons), 6)
+        self.assertTrue(all("content_asset" in lesson for section in reviewed["course_template"]["sections"] for lesson in section["lessons"]))
+        self.assertIn("content_asset", reviewed["course_template"]["assessment"])
 
     def test_phone_login_and_role_scoped_learner_flow(self) -> None:
         role = self.service.generate_role_blueprint(
@@ -168,6 +185,24 @@ class LMSEngineMVPTestCase(unittest.TestCase):
         dashboard = self.service.get_my_dashboard(learner_token)
         self.assertEqual(dashboard["metrics"]["lessons_completed"], 1)
 
+        assignment = next(
+            lesson
+            for section in dashboard["enrollment"]["course"]["sections"]
+            for lesson in section["lessons"]
+            if lesson["resource_type"] == "assignment"
+        )
+        submission = self.service.submit_my_assignment(
+            learner_token,
+            assignment["id"],
+            {
+                "responses": [
+                    {"prompt_id": prompt["id"], "response_text": "Completed action note"}
+                    for prompt in assignment["assignment_prompts"]
+                ]
+            },
+        )
+        self.assertEqual(submission["lesson_id"], assignment["id"])
+
         questions = dashboard["enrollment"]["course"]["assessment"]["questions"]
         answers = [
             {
@@ -204,7 +239,7 @@ class LMSEngineMVPTestCase(unittest.TestCase):
         self.assertEqual(updated_dashboard["metrics"]["weak_kpis"], 0)
         self.assertEqual(updated_dashboard["remediation_assignments"][0]["status"], "resolved")
 
-    def test_owner_and_learner_permissions_are_separated(self) -> None:
+    def test_trainer_and_learner_permissions_are_separated(self) -> None:
         role = self.service.generate_role_blueprint(
             {
                 "segment": "Retail",
@@ -233,10 +268,10 @@ class LMSEngineMVPTestCase(unittest.TestCase):
         learner_token = learner_login["token"]
 
         with self.assertRaises(AuthorizationError):
-            self.service.require_owner(learner_token)
+            self.service.require_trainer(learner_token)
 
-        owner = self.service.get_current_user(self.owner_token)
-        self.assertEqual(owner["user_type"], "owner")
+        trainer = self.service.get_current_user(self.trainer_token)
+        self.assertEqual(trainer["user_type"], "trainer")
         self.assertEqual(created["user"]["user_type"], "learner")
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 from dataclasses import asdict, is_dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -56,6 +57,9 @@ def create_handler(container: AppContainer) -> Callable[..., BaseHTTPRequestHand
                 if method == "GET" and path in STATIC_FILES:
                     self._send_static(path)
                     return
+                if method == "GET" and path.startswith("/media/"):
+                    self._send_media(path)
+                    return
                 payload = self._read_json_body() if method == "POST" else None
                 token = self._extract_token()
                 response = route_request(container, method, path, payload, token)
@@ -102,6 +106,19 @@ def create_handler(container: AppContainer) -> Callable[..., BaseHTTPRequestHand
             self.end_headers()
             self.wfile.write(response_bytes)
 
+        def _send_media(self, path: str) -> None:
+            relative_path = path[len("/media/") :]
+            file_path = container.engine.asset_store.resolve(relative_path)
+            if not file_path.exists():
+                raise RouteNotFoundError("Media file not found: {0}".format(path))
+            response_bytes = file_path.read_bytes()
+            content_type, _ = mimetypes.guess_type(str(file_path))
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", content_type or "application/octet-stream")
+            self.send_header("Content-Length", str(len(response_bytes)))
+            self.end_headers()
+            self.wfile.write(response_bytes)
+
         def _extract_token(self) -> str:
             header = self.headers.get("Authorization", "")
             if header.startswith("Bearer "):
@@ -127,7 +144,7 @@ def route_request(
         return {"item": engine.get_config()}
 
     if method == "POST" and path == "/api/demo/seed":
-        engine.require_owner(token)
+        engine.require_trainer(token)
         return {"item": engine.reset_and_seed_demo()}
 
     if method == "POST" and path == "/api/auth/request-code":
@@ -140,42 +157,42 @@ def route_request(
         return {"item": engine.get_current_user(token)}
 
     if method == "GET" and path == "/api/roles":
-        engine.require_owner(token)
+        engine.require_trainer(token)
         return {"items": engine.list_roles()}
 
     if method == "POST" and path == "/api/roles/generate":
-        engine.require_owner(token)
+        engine.require_trainer(token)
         return {"item": engine.generate_role_blueprint(payload or {})}
 
     if path.startswith("/api/roles/"):
         suffix = path[len("/api/roles/") :]
         if "/" not in suffix and method == "GET":
-            engine.require_owner(token)
+            engine.require_trainer(token)
             return {"item": engine.get_role(suffix)}
         if suffix.endswith("/review") and method == "POST":
-            engine.require_owner(token)
+            engine.require_trainer(token)
             role_id = suffix[: -len("/review")].rstrip("/")
             return {"item": engine.apply_role_review(role_id, payload or {})}
         if suffix.endswith("/publish") and method == "POST":
-            engine.require_owner(token)
+            engine.require_trainer(token)
             role_id = suffix[: -len("/publish")].rstrip("/")
             return {"item": engine.publish_role(role_id)}
 
     if method == "GET" and path == "/api/learners":
-        engine.require_owner(token)
+        engine.require_trainer(token)
         return {"items": engine.list_learners()}
 
     if method == "GET" and path == "/api/users":
-        engine.require_owner(token)
+        engine.require_trainer(token)
         return {"items": engine.list_users()}
 
     if method == "POST" and path == "/api/users":
-        engine.require_owner(token)
+        engine.require_trainer(token)
         return {"item": engine.create_user(payload or {})}
 
-    if method == "GET" and path == "/api/dashboard/owner":
-        engine.require_owner(token)
-        return {"item": engine.get_owner_dashboard()}
+    if method == "GET" and path in {"/api/dashboard/trainer", "/api/dashboard/owner"}:
+        engine.require_trainer(token)
+        return {"item": engine.get_trainer_dashboard()}
 
     if method == "GET" and path == "/api/my/dashboard":
         return {"item": engine.get_my_dashboard(token)}
@@ -184,11 +201,19 @@ def route_request(
         lesson_id = path[len("/api/my/lessons/") : -len("/complete")].rstrip("/")
         return {"item": engine.complete_my_lesson(token, lesson_id)}
 
+    if path.startswith("/api/my/assignments/") and path.endswith("/submit") and method == "POST":
+        lesson_id = path[len("/api/my/assignments/") : -len("/submit")].rstrip("/")
+        return {"item": engine.submit_my_assignment(token, lesson_id, payload or {})}
+
     if method == "POST" and path == "/api/my/assessment/submit":
         return {"item": engine.submit_my_assessment(token, payload or {})}
 
     if method == "POST" and path == "/api/my/kpis":
         return {"item": engine.record_my_kpi(token, payload or {})}
+
+    if path.startswith("/api/my/lessons/") and path.endswith("/media") and method == "POST":
+        lesson_id = path[len("/api/my/lessons/") : -len("/media")].rstrip("/")
+        return {"item": engine.upload_lesson_media(token, lesson_id, payload or {})}
 
     raise RouteNotFoundError("Route not found: {0} {1}".format(method, path))
 

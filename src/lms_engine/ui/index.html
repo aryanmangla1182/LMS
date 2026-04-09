@@ -7,131 +7,125 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <div class="halo halo-a"></div>
-  <div class="halo halo-b"></div>
-  <div class="grid-fade"></div>
-
   <main class="page-shell">
-    <section class="hero panel">
+    <header id="landing-header" class="panel header-bar">
       <div class="hero-copy-block">
-        <div class="brand-row">
-          <div class="brand-mark">CF</div>
-          <div>
-            <p class="eyebrow">Cultfit Learning Engine</p>
-            <p class="brand-subtitle">Role readiness, KPI remediation, and guided growth for frontline teams.</p>
-          </div>
-        </div>
-        <h1>Professional learning ops for store, gym, and regional leadership teams.</h1>
+        <span class="hero-kicker">Cultfit LMS Engine</span>
+        <h1>Role-Based Learning, Assessment &amp; Performance Improvement</h1>
         <p class="hero-copy">
-          Owners define a role, review an AI-generated path, publish role-based training, and monitor which skills and
-          KPIs stay weak. Learners see only their assigned course, assessments, remediation, and readiness signals.
+          Build role-specific learning journeys, review generated paths, assign learners, and track assessment and KPI outcomes in one place.
         </p>
         <div class="hero-points">
-          <span class="chip soft">Role blueprinting</span>
-          <span class="chip soft">Phone auth</span>
-          <span class="chip soft">KPI-triggered remediation</span>
-          <span class="chip soft">Owner analytics</span>
+          <span class="chip soft">Role-first course design</span>
+          <span class="chip soft">Assessment and KPI tracking</span>
+          <span class="chip soft">Trainer and learner workspaces</span>
         </div>
       </div>
-
-      <aside class="hero-side">
-        <div class="status-stack">
-          <div class="signal-card">
-            <p class="eyebrow">System Mode</p>
-            <div id="config-badge" class="badge soft">Checking configuration...</div>
-          </div>
-          <div class="signal-card">
-            <p class="eyebrow">Workspace</p>
-            <p class="signal-copy">Use the owner workspace to generate and publish role academies, then log in as a learner to test the experience.</p>
-          </div>
-          <button id="seed-btn" class="secondary hidden">Reset And Seed Demo</button>
+      <div class="hero-summary">
+        <div class="hero-stat">
+          <span class="meta">For trainers</span>
+          <strong>Create roles, review paths, publish courses</strong>
         </div>
-      </aside>
-    </section>
+        <div class="hero-stat">
+          <span class="meta">For learners</span>
+          <strong>Take lessons, finish assignments, complete assessments</strong>
+        </div>
+        <div class="hero-stat">
+          <span class="meta">For performance</span>
+          <strong>See weak KPIs early and improve the role academy</strong>
+        </div>
+      </div>
+    </header>
 
     <section id="auth-panel" class="auth-shell">
-      <article class="panel auth-intro">
-        <p class="eyebrow">Access Model</p>
-        <h2>One product, two experiences</h2>
-        <div class="auth-columns">
-          <div class="mini-card">
-            <strong>Owner</strong>
-            <p>Create roles, review learning paths, publish role academies, create users, and track KPI hotspots.</p>
-          </div>
-          <div class="mini-card">
-            <strong>Learner</strong>
-            <p>Open assigned lessons, take assessments, log KPI observations, and receive focused remediation.</p>
+      <article class="panel auth-card">
+        <div class="panel-head auth-head">
+          <div>
+            <p class="eyebrow">Sign In</p>
+            <h2>Open Your Workspace</h2>
           </div>
         </div>
-      </article>
-
-      <section class="grid two auth-grid">
-        <article class="panel auth-card">
-          <div class="panel-head">
-            <div>
-              <p class="eyebrow">Step 1</p>
-              <h2>Request Login Code</h2>
+        <div class="auth-intro">
+          <strong>Single login entry point</strong>
+          <div class="meta">Enter your mobile number, request a code, then verify it. The platform opens the right workspace based on your account type.</div>
+        </div>
+        <div class="stack auth-steps auth-form-shell">
+          <form id="request-code-form" class="form auth-form">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Step 1</p>
+                <h2>Request Code</h2>
+              </div>
             </div>
-          </div>
-          <form id="request-code-form" class="form">
             <label>
               Mobile Number
-              <input name="phone_number" placeholder="9999999999" required>
+              <div class="input-frame">
+                <span class="input-prefix">+91</span>
+                <input name="phone_number" inputmode="numeric" placeholder="9999999999" required>
+              </div>
+              <span class="input-note">Use the phone number assigned to your trainer or learner account.</span>
             </label>
-            <button type="submit" class="primary">Send Test Code</button>
+            <button type="submit" class="primary">Request Code</button>
           </form>
           <div id="request-code-result" class="stack"></div>
-        </article>
 
-        <article class="panel auth-card">
-          <div class="panel-head">
-            <div>
-              <p class="eyebrow">Step 2</p>
-              <h2>Verify And Open Workspace</h2>
+          <form id="verify-code-form" class="form auth-form hidden">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Step 2</p>
+                <h2>Enter Code</h2>
+              </div>
             </div>
-          </div>
-          <form id="verify-code-form" class="form">
-            <label>
-              Mobile Number
-              <input name="phone_number" placeholder="9999999999" required>
-            </label>
             <label>
               Code
-              <input name="code" placeholder="111111" required>
+              <div class="input-frame">
+                <input name="code" inputmode="numeric" placeholder="111111" required>
+              </div>
+              <span class="input-note">Enter the one-time code sent for this login attempt.</span>
             </label>
             <button type="submit" class="primary">Enter Workspace</button>
           </form>
           <div id="verify-code-result" class="stack"></div>
-        </article>
-      </section>
+        </div>
+      </article>
     </section>
 
     <section id="workspace" class="workspace hidden">
       <section class="panel topbar">
-        <div>
-          <p class="eyebrow">Active Session</p>
+        <div class="workspace-banner">
+          <div class="workspace-badge-row">
+            <span class="workspace-badge">Workspace</span>
+            <span id="workspace-role-chip" class="chip soft">Trainer</span>
+          </div>
           <h2 id="user-banner-title">Workspace</h2>
           <div id="user-banner-copy" class="meta"></div>
         </div>
-        <div class="actions">
-          <div class="user-dot"></div>
+        <div id="workspace-summary" class="workspace-summary"></div>
+        <div class="actions topbar-actions">
           <button id="logout-btn" class="secondary">Logout</button>
         </div>
       </section>
 
       <nav class="tabs" id="tabs">
-        <button class="tab active owner-only" data-tab="admin">Owner Studio</button>
-        <button class="tab owner-only" data-tab="owner">Owner Metrics</button>
+        <button class="tab active trainer-only" data-tab="admin">Trainer Studio</button>
+        <button class="tab trainer-only" data-tab="trainer">Trainer Metrics</button>
         <button class="tab learner-only" data-tab="learner">My Learning</button>
       </nav>
 
-      <section id="admin" class="tab-panel active owner-only">
-        <div class="grid stage-grid">
-          <article class="panel stage-card">
+      <section id="admin" class="tab-panel active trainer-only">
+        <nav class="subtabs" data-group="admin">
+          <button class="subtab active" data-group="admin" data-subtab="trainer-role-input">Role Input</button>
+          <button class="subtab" data-group="admin" data-subtab="trainer-review">Review & Approve</button>
+          <button class="subtab" data-group="admin" data-subtab="trainer-roles">Roles</button>
+          <button class="subtab" data-group="admin" data-subtab="trainer-users">Users</button>
+        </nav>
+
+        <section id="trainer-role-input" class="subtab-panel active" data-group="admin">
+          <article class="panel">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Stage 1</p>
-                <h2>Define Role Blueprint</h2>
+                <p class="eyebrow">Role Input</p>
+                <h2>Define Role</h2>
               </div>
             </div>
             <form id="role-form" class="form">
@@ -150,36 +144,68 @@ Customer Focus & Service Excellence
 Initiative & Drive for Results
 Leadership & People Development
 Teamwork & Collaboration</textarea></label>
-              <label>KPIs<textarea name="kpis" rows="8">UPT|UNIT PER TRANSACTION|3|count|0.85
+              <label>KPI Format
+                <div class="meta">KPI_NAME | description | target_value | unit | weak_threshold</div>
+                <textarea name="kpis" rows="8">UPT|UNIT PER TRANSACTION|3|count|0.85
 ATV|AVERAGE TRANSACTION VALUE|2500|INR|0.9
 ASP|AVERAGE SELLING PRICE|1200|INR|0.9
 Conv|CONVERSION|30|%|0.85</textarea></label>
-              <button type="submit" class="primary">Generate Role</button>
+              <button type="submit" class="primary">Create Draft Role</button>
             </form>
           </article>
+        </section>
 
-          <article class="panel stage-card">
-            <div class="panel-head">
+        <section id="trainer-review" class="subtab-panel" data-group="admin">
+          <article class="panel">
+            <div class="panel-head role-course-head">
               <div>
-                <p class="eyebrow">Stage 2</p>
-                <h2>Review And Publish</h2>
+                <p class="eyebrow">Review</p>
+                <h2>Review & Approve Role</h2>
               </div>
+              <button id="review-back-to-roles-btn" class="secondary">Back To Roles</button>
             </div>
-            <div id="role-status" class="empty">No generated role yet.</div>
-            <label class="review-box">Review Suggestions<textarea id="review-note" rows="4" placeholder="Request changes before publish."></textarea></label>
-            <div class="actions">
-              <button id="apply-review-btn" class="secondary" disabled>Apply Review</button>
-              <button id="publish-role-btn" class="primary" disabled>Publish Role</button>
+            <div class="review-layout">
+              <div id="role-status" class="empty">No role selected for review yet.</div>
+              <label class="review-box">Review Suggestions<textarea id="review-note" rows="4" placeholder="Add change requests before approval."></textarea></label>
+              <div class="actions review-actions">
+                <button id="apply-review-btn" class="secondary" disabled>Apply Review</button>
+                <button id="publish-role-btn" class="primary" disabled>Approve & Create Course</button>
+              </div>
+              <div id="role-detail" class="stack role-detail-stack"></div>
             </div>
-            <div id="role-detail" class="stack"></div>
           </article>
-        </div>
+        </section>
 
-        <div class="grid two">
+        <section id="trainer-role-course" class="subtab-panel" data-group="admin">
+          <article class="panel">
+            <div class="panel-head role-course-head">
+              <div>
+                <p class="eyebrow">Role Course</p>
+                <h2 id="trainer-course-title">Generated Course</h2>
+              </div>
+              <button id="back-to-roles-btn" class="secondary">Back To Roles</button>
+            </div>
+            <div id="trainer-course-preview" class="stack"></div>
+          </article>
+        </section>
+
+        <section id="trainer-roles" class="subtab-panel" data-group="admin">
           <article class="panel">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Stage 3</p>
+                <p class="eyebrow">Roles</p>
+                <h2>Role Library</h2>
+              </div>
+            </div>
+            <div id="trainer-role-library" class="stack"></div>
+          </article>
+        </section>
+
+        <section id="trainer-users" class="subtab-panel" data-group="admin">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Users</p>
                 <h2>Create Learner Account</h2>
               </div>
             </div>
@@ -195,74 +221,83 @@ Conv|CONVERSION|30|%|0.85</textarea></label>
           <article class="panel">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Access Registry</p>
-                <h2>Owner And Learner Accounts</h2>
+                <p class="eyebrow">Users</p>
+                <h2>Trainer And Learner Users</h2>
               </div>
             </div>
-            <div id="admin-summary" class="stack"></div>
+            <div id="admin-summary" class="stack scroll-panel"></div>
           </article>
-        </div>
+        </section>
       </section>
 
       <section id="learner" class="tab-panel learner-only">
-        <div class="grid two">
-          <article class="panel learner-primary">
+        <nav class="subtabs" data-group="learner">
+          <button class="subtab active" data-group="learner" data-subtab="learner-course">Course</button>
+          <button class="subtab" data-group="learner" data-subtab="learner-review">Review</button>
+        </nav>
+
+        <section id="learner-course" class="subtab-panel active" data-group="learner">
+          <article class="panel">
             <div class="panel-head">
               <div>
                 <p class="eyebrow">Assigned Course</p>
-                <h2>My Learning Journey</h2>
+                <h2 id="learner-course-title">My Learning Journey</h2>
               </div>
             </div>
             <div id="learner-metrics" class="metric-banner empty">Sign in as a learner to view your role course.</div>
             <div id="course-view" class="stack"></div>
           </article>
+        </section>
 
-          <div class="stack">
-            <article class="panel">
-              <div class="panel-head">
-                <div>
-                  <p class="eyebrow">Assessment</p>
-                  <h2>Mastery Check</h2>
-                </div>
+        <section id="learner-review" class="subtab-panel" data-group="learner">
+          <article class="panel">
+            <div class="panel-head role-course-head">
+              <div>
+                <p class="eyebrow">Review</p>
+                <h2>Progress And Performance</h2>
               </div>
-              <form id="assessment-form" class="stack"></form>
-              <button id="submit-assessment-btn" class="primary" disabled>Submit Assessment</button>
-              <div id="assessment-result" class="stack"></div>
-            </article>
-
-            <article class="panel">
-              <div class="panel-head">
-                <div>
-                  <p class="eyebrow">KPI Tracking</p>
-                  <h2>Record KPI Observation</h2>
-                </div>
-              </div>
-              <form id="kpi-form" class="form">
-                <label>KPI<select id="kpi-select" name="kpi_id"></select></label>
-                <label>Actual Value<input name="value" type="number" step="0.01" required></label>
-                <label>Target Value<input name="target_value" type="number" step="0.01" required></label>
-                <label>Period<input name="period_label" value="Current Month"></label>
-                <label>Notes<textarea name="notes" rows="3"></textarea></label>
-                <button type="submit" class="primary">Record KPI</button>
-              </form>
-            </article>
-          </div>
-        </div>
-
-        <article class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="eyebrow">Weakness View</p>
-              <h2>My KPI And Remediation</h2>
+              <button id="learner-review-back-btn" class="secondary">Back To Course</button>
             </div>
-          </div>
-          <div id="kpi-view" class="stack"></div>
-        </article>
+            <div id="learner-review-summary" class="grid two"></div>
+            <div id="assessment-result" class="stack"></div>
+            <div id="kpi-view" class="stack"></div>
+          </article>
+        </section>
       </section>
 
-      <section id="owner" class="tab-panel owner-only">
-        <div id="owner-summary" class="grid four summary-grid"></div>
-        <div class="grid two">
+      <section id="trainer" class="tab-panel trainer-only">
+        <nav class="subtabs" data-group="trainer">
+          <button class="subtab active" data-group="trainer" data-subtab="trainer-overview">Overview</button>
+          <button class="subtab" data-group="trainer" data-subtab="trainer-roles">Roles</button>
+          <button class="subtab" data-group="trainer" data-subtab="trainer-hotspots">Hotspots</button>
+        </nav>
+
+        <section id="trainer-overview" class="subtab-panel active" data-group="trainer">
+          <div id="trainer-summary" class="grid four summary-grid"></div>
+          <div class="grid two">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Overview</p>
+                  <h2>Training Snapshot</h2>
+                </div>
+              </div>
+              <div id="trainer-overview-detail" class="stack"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Insights</p>
+                  <h2>Immediate Actions</h2>
+                </div>
+              </div>
+              <div id="trainer-insights" class="stack"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="trainer-roles" class="subtab-panel" data-group="trainer">
           <article class="panel">
             <div class="panel-head">
               <div>
@@ -272,7 +307,9 @@ Conv|CONVERSION|30|%|0.85</textarea></label>
             </div>
             <div id="role-metrics" class="stack"></div>
           </article>
+        </section>
 
+        <section id="trainer-hotspots" class="subtab-panel" data-group="trainer">
           <article class="panel">
             <div class="panel-head">
               <div>
@@ -282,19 +319,35 @@ Conv|CONVERSION|30|%|0.85</textarea></label>
             </div>
             <div id="hotspots" class="stack"></div>
           </article>
-        </div>
-
-        <article class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="eyebrow">Recent Events</p>
-              <h2>Owner Activity Log</h2>
-            </div>
-          </div>
-          <div id="activity-log" class="stack"></div>
-        </article>
+        </section>
       </section>
     </section>
+
+    <div id="lesson-player-modal" class="modal hidden">
+      <div class="modal-backdrop" data-close-modal="true"></div>
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Lesson Player</p>
+            <h2 id="lesson-player-title">Video Lesson</h2>
+          </div>
+          <button id="close-lesson-player-btn" class="secondary">Back</button>
+        </div>
+        <div class="video-player-shell">
+          <div class="video-overlay">
+            <span class="chip soft" id="lesson-player-badge">Video lesson</span>
+            <strong id="lesson-player-section">Generating lesson video</strong>
+          </div>
+          <video id="lesson-player-video" class="lesson-video" controls playsinline></video>
+          <canvas id="lesson-player-canvas" class="hidden"></canvas>
+          <div id="lesson-player-scene" class="video-scene-copy"></div>
+          <div class="progress-track">
+            <div id="lesson-player-progress" class="progress-fill" style="width: 0%"></div>
+          </div>
+          <div id="lesson-player-meta" class="meta"></div>
+        </div>
+      </div>
+    </div>
   </main>
 
   <script src="/app.js"></script>

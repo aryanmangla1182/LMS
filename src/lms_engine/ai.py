@@ -179,15 +179,23 @@ class AIContentGenerator:
                 "items": [
                     {
                         "title": "{0} SOP Foundations".format(title),
-                        "description": "Operating standards, handoff process, and policy essentials.",
+                        "description": "Video lesson on non-negotiable operating standards, handoff process, and policy essentials.",
                         "skill_names": [skills[0]["name"]],
                         "kpi_names": [kpis[0]["name"]],
                         "resource_type": "video",
-                        "duration_minutes": 18,
+                        "duration_minutes": 1,
+                    },
+                    {
+                        "title": "{0} Risk and Escalation Drill".format(title),
+                        "description": "Scenario-based video on handling exceptions, escalations, and recovery without breaking process.",
+                        "skill_names": [skills[0]["name"], skills[1]["name"]],
+                        "kpi_names": [kpis[0]["name"]],
+                        "resource_type": "video",
+                        "duration_minutes": 1,
                     },
                     {
                         "title": "Policy and Safety Checklist",
-                        "description": "Mandatory compliance topics for the role.",
+                        "description": "Mandatory on-floor checklist covering policy, safety, and reporting controls.",
                         "skill_names": [skills[1]["name"]],
                         "kpi_names": [kpis[0]["name"]],
                         "resource_type": "assignment",
@@ -202,17 +210,25 @@ class AIContentGenerator:
                 "items": [
                     {
                         "title": "{0} Performance Coaching".format(title),
-                        "description": "Sharpen team, service, and daily execution habits.",
+                        "description": "Manager-style video on sharpening team rhythm, service quality, and daily execution habits.",
                         "skill_names": [skills[1]["name"], skills[2]["name"]],
                         "kpi_names": [kpis[min(1, len(kpis) - 1)]["name"], kpis[0]["name"]],
                         "resource_type": "video",
-                        "duration_minutes": 20,
+                        "duration_minutes": 1,
+                    },
+                    {
+                        "title": "{0} KPI Recovery Moves".format(title),
+                        "description": "Video lesson on diagnosing weak KPIs and selecting the right daily recovery actions.",
+                        "skill_names": [skills[0]["name"], skills[2]["name"], skills[3]["name"]],
+                        "kpi_names": [kpis[0]["name"]],
+                        "resource_type": "video",
+                        "duration_minutes": 1,
                     },
                     {
                         "title": "Decision-Making in Live Operations",
-                        "description": "Handle day-to-day tradeoffs with speed and consistency.",
+                        "description": "Decision brief for handling day-to-day tradeoffs with speed and consistency.",
                         "skill_names": [skills[0]["name"], skills[2]["name"]],
-                        "kpi_names": [kpis[0]["name"]],
+                        "kpi_names": [kpis[0]["name"], kpis[min(1, len(kpis) - 1)]["name"]],
                         "resource_type": "document",
                         "duration_minutes": 15,
                     },
@@ -225,11 +241,19 @@ class AIContentGenerator:
                 "items": [
                     {
                         "title": "Leading Beyond the Current Role",
-                        "description": "Develop ownership, influence, and next-level communication.",
+                        "description": "Leadership video focused on ownership, influence, and next-level communication.",
                         "skill_names": [skills[3]["name"], skills[4]["name"]],
                         "kpi_names": [kpis[min(2, len(kpis) - 1)]["name"]],
                         "resource_type": "video",
-                        "duration_minutes": 16,
+                        "duration_minutes": 1,
+                    },
+                    {
+                        "title": "{0} Team Development Lab".format(title),
+                        "description": "Video lesson on coaching successors, delegating effectively, and building bench strength.",
+                        "skill_names": [skills[3]["name"], skills[4]["name"]],
+                        "kpi_names": [kpis[min(2, len(kpis) - 1)]["name"]],
+                        "resource_type": "video",
+                        "duration_minutes": 1,
                     },
                     {
                         "title": "Next-Level Business Review Assignment",
@@ -252,7 +276,17 @@ class AIContentGenerator:
                         "title": item["title"],
                         "resource_type": item["resource_type"],
                         "summary": item["description"],
-                        "content": self._lesson_content(title, level, segment, item["title"], responsibilities, review_note),
+                        "content": self._lesson_content(
+                            title,
+                            level,
+                            segment,
+                            item["title"],
+                            item["resource_type"],
+                            item["skill_names"],
+                            item["kpi_names"],
+                            responsibilities,
+                            review_note,
+                        ),
                         "skill_names": item["skill_names"],
                         "kpi_names": item["kpi_names"],
                         "duration_minutes": item["duration_minutes"],
@@ -269,6 +303,7 @@ class AIContentGenerator:
 
         assessment = {
             "title": "{0} Mastery Check".format(title),
+            "passing_score": 75,
             "questions": self._default_questions(title, skills, kpis, responsibilities),
         }
         remediation_paths = []
@@ -311,17 +346,46 @@ class AIContentGenerator:
         level: str,
         segment: str,
         lesson_title: str,
+        resource_type: str,
+        skill_names: List[str],
+        kpi_names: List[str],
         responsibilities: List[str],
         review_note: str,
     ) -> str:
         lines = [
+            "Format: {0}".format(resource_type.title()),
             "Role: {0} | Segment: {1} | Level: {2}".format(title, segment, level),
             "Lesson: {0}".format(lesson_title),
-            "Focus areas:",
+            "",
+            "What this module covers:",
         ]
         lines.extend("- {0}".format(item) for item in responsibilities[:3])
-        lines.append("Apply this lesson on the floor and capture what changed in your execution.")
+        if skill_names:
+            lines.append("")
+            lines.append("Primary skills:")
+            lines.extend("- {0}".format(item) for item in skill_names[:3])
+        if kpi_names:
+            lines.append("")
+            lines.append("KPIs supported:")
+            lines.extend("- {0}".format(item) for item in kpi_names[:3])
+        lines.extend(
+            [
+                "",
+                "Scenario:",
+                "You are running a live shift and one of the role-critical KPIs starts slipping while service quality is under pressure.",
+                "",
+                "What good looks like:",
+                "- Spot the issue early",
+                "- Coach the team with one clear action",
+                "- Protect compliance before chasing output",
+                "- Recheck the KPI after the intervention",
+                "",
+                "On-floor drill:",
+                "Apply one improvement move from this module in the next operating cycle and note the result.",
+            ]
+        )
         if review_note.strip():
+            lines.append("")
             lines.append("Reviewer request addressed: {0}".format(review_note.strip()))
         return "\n".join(lines)
 
@@ -332,6 +396,9 @@ class AIContentGenerator:
         kpis: List[Dict[str, Any]],
         responsibilities: List[str],
     ) -> List[Dict[str, Any]]:
+        first_kpi = kpis[0]["name"]
+        second_kpi = kpis[min(1, len(kpis) - 1)]["name"]
+        third_kpi = kpis[min(2, len(kpis) - 1)]["name"]
         return [
             {
                 "prompt": "Which action best protects compliance in the {0} role?".format(title),
@@ -344,7 +411,7 @@ class AIContentGenerator:
                 "correct_option_index": 1,
                 "explanation": "Reliable execution starts with standard work even during high pressure periods.",
                 "skill_names": [skills[0]["name"]],
-                "kpi_names": [kpis[0]["name"]],
+                "kpi_names": [first_kpi],
             },
             {
                 "prompt": "What is the best first response when a KPI drops below target?",
@@ -357,7 +424,7 @@ class AIContentGenerator:
                 "correct_option_index": 2,
                 "explanation": "The right response is targeted remediation tied to the actual skill and KPI weakness.",
                 "skill_names": [skills[1]["name"], skills[2]["name"]],
-                "kpi_names": [kpis[0]["name"], kpis[1]["name"]],
+                "kpi_names": [first_kpi, second_kpi],
             },
             {
                 "prompt": "Which behavior best prepares someone for the next role?",
@@ -370,7 +437,7 @@ class AIContentGenerator:
                 "correct_option_index": 1,
                 "explanation": "Next-level readiness requires broader ownership and decision quality.",
                 "skill_names": [skills[3]["name"], skills[4]["name"]],
-                "kpi_names": [kpis[2]["name"]],
+                "kpi_names": [third_kpi],
             },
             {
                 "prompt": "A repeated customer issue appears in the same week. What should happen next?",
@@ -383,6 +450,71 @@ class AIContentGenerator:
                 "correct_option_index": 2,
                 "explanation": "Pattern recognition and corrective coaching improve service and execution KPIs.",
                 "skill_names": [skills[1]["name"], skills[2]["name"]],
-                "kpi_names": [kpis[1]["name"]],
+                "kpi_names": [second_kpi],
+            },
+            {
+                "prompt": "A team member keeps missing the daily standard that protects {0}. What is the best manager move?".format(first_kpi),
+                "options": [
+                    "Wait until the monthly review",
+                    "Coach on the missed standard immediately and observe the next cycle",
+                    "Escalate without any local intervention",
+                    "Replace the KPI target with a lower one",
+                ],
+                "correct_option_index": 1,
+                "explanation": "Immediate coaching tied to the missed standard is the fastest way to recover a weak KPI.",
+                "skill_names": [skills[1]["name"], skills[3]["name"]],
+                "kpi_names": [first_kpi],
+            },
+            {
+                "prompt": "Which action is most likely to improve {0} without hurting service quality?".format(second_kpi),
+                "options": [
+                    "Push random upsells without understanding the need",
+                    "Use product recommendations linked to the customer need and current basket",
+                    "Skip service steps to save time",
+                    "Reduce coaching to focus only on billing speed",
+                ],
+                "correct_option_index": 1,
+                "explanation": "Better commercial outcomes come from relevant recommendations and consistent service behavior.",
+                "skill_names": [skills[2]["name"], skills[3]["name"]],
+                "kpi_names": [second_kpi],
+            },
+            {
+                "prompt": "You are reviewing end-of-day performance and {0} is weak for the third time this week. What should happen?".format(third_kpi),
+                "options": [
+                    "Treat it as random variation",
+                    "Capture the pattern, review root cause, and assign targeted learning",
+                    "Stop reporting it for a week",
+                    "Change the KPI definition",
+                ],
+                "correct_option_index": 1,
+                "explanation": "Repeated KPI weakness needs pattern review and targeted intervention, not guesswork.",
+                "skill_names": [skills[0]["name"], skills[4]["name"]],
+                "kpi_names": [third_kpi],
+            },
+            {
+                "prompt": "Which response shows the strongest next-level judgement for the {0} role?".format(title),
+                "options": [
+                    "Optimise only your own shift outcomes",
+                    "Build a repeatable fix the team can use after you leave the floor",
+                    "Wait for your manager to decide",
+                    "Focus only on the easiest KPI to move",
+                ],
+                "correct_option_index": 1,
+                "explanation": "Next-level behaviour creates repeatable team capability, not one-off heroics.",
+                "skill_names": [skills[3]["name"], skills[4]["name"]],
+                "kpi_names": [first_kpi, third_kpi],
+            },
+            {
+                "prompt": "What is the best evidence that a weak topic from training has actually improved on the job?",
+                "options": [
+                    "The learner says they understood the video",
+                    "The linked KPI improves and the operating behavior is observed consistently",
+                    "The learner watched the lesson twice",
+                    "A manager assumes it is fixed",
+                ],
+                "correct_option_index": 1,
+                "explanation": "The platform should connect learning completion to KPI recovery and observed execution quality.",
+                "skill_names": [skills[0]["name"], skills[2]["name"]],
+                "kpi_names": [first_kpi, second_kpi],
             },
         ]

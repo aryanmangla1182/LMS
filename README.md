@@ -1,6 +1,6 @@
 # LMS Engine MVP
 
-This is a working LMS MVP for role-based learning, assessments, KPI remediation, and owner metrics.
+This is a working LMS MVP for role-based learning, assessments, KPI remediation, and trainer metrics.
 
 ## What It Does
 
@@ -11,7 +11,7 @@ This is a working LMS MVP for role-based learning, assessments, KPI remediation,
 - let learners complete lessons and submit assessments
 - analyze weak skills and likely KPI risk areas from assessment results
 - record KPI observations and assign KPI-specific remediation
-- show owner metrics for role performance, weak skills, weak KPIs, and recent activity
+- show trainer metrics for role performance, weak skills, weak KPIs, and recent activity
 
 ## AI Support
 
@@ -58,7 +58,7 @@ The UI is served from `/`.
 - record KPI observations
 - receive remediation when KPIs are weak
 
-### Owner Metrics
+### Trainer Metrics
 
 - learner counts
 - completion percentage
