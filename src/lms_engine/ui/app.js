@@ -46,6 +46,7 @@ const roleForm = document.getElementById("role-form");
 const learnerForm = document.getElementById("learner-form");
 const roleStatus = document.getElementById("role-status");
 const roleDetail = document.getElementById("role-detail");
+const roleReviewHistory = document.getElementById("role-review-history");
 const reviewNoteInput = document.getElementById("review-note");
 const applyReviewBtn = document.getElementById("apply-review-btn");
 const publishRoleBtn = document.getElementById("publish-role-btn");
@@ -77,7 +78,6 @@ const trainerSummary = document.getElementById("trainer-summary");
 const trainerOverviewDetail = document.getElementById("trainer-overview-detail");
 const trainerInsights = document.getElementById("trainer-insights");
 const roleMetrics = document.getElementById("role-metrics");
-const hotspots = document.getElementById("hotspots");
 let pendingPhoneNumber = "";
 
 function escapeHtml(value) {
@@ -198,6 +198,49 @@ function normalizeDisplayName(user) {
 
 function currentSelectedRole() {
   return state.roles.find((role) => role.id === state.selectedRoleId) || null;
+}
+
+function formatTargetValue(kpi) {
+  const target = kpi?.target_value ?? "";
+  const unit = String(kpi?.unit || "").trim();
+  return unit ? `${target} ${unit}` : String(target);
+}
+
+function flattenCourseLessons(role) {
+  return (role?.course_template?.sections || []).flatMap((section) =>
+    (section.lessons || []).map((lesson) => ({ ...lesson, section_key: section.key, section_title: section.title }))
+  );
+}
+
+function openTrainerCourseMode(mode, lessonId = null) {
+  const role = currentSelectedRole();
+  if (!role) {
+    return;
+  }
+  state.trainerCourseView = { mode, lessonId };
+  setSubtab("admin", "trainer-role-course");
+  renderTrainerCoursePreview(role);
+}
+
+function attachTrainerReviewHandlers(role) {
+  document.querySelectorAll(".review-jump-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = document.getElementById(button.dataset.reviewTarget);
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+  document.querySelectorAll(".trainer-review-open-video-btn").forEach((button) => {
+    button.addEventListener("click", () => openLessonPlayer(button.dataset.lesson));
+  });
+  document.querySelectorAll(".trainer-review-open-assignment-btn, .trainer-review-open-lesson-btn").forEach((button) => {
+    button.addEventListener("click", () => openTrainerCourseMode("lesson", button.dataset.lesson));
+  });
+  document.querySelectorAll(".trainer-review-open-assessment-btn").forEach((button) => {
+    button.addEventListener("click", () => openTrainerCourseMode("assessment"));
+  });
+  document.querySelectorAll(".trainer-review-open-course-btn").forEach((button) => {
+    button.addEventListener("click", () => openTrainerCourseMode("overview"));
+  });
 }
 
 function assignmentPromptsForLesson(lesson) {
@@ -327,7 +370,7 @@ function setVisibilityForUser() {
 function renderRoleOptions() {
   const publishedRoles = state.roles.filter((role) => role.status === "published");
   roleSelect.innerHTML = publishedRoles.length
-    ? publishedRoles.map((role) => `<option value="${role.id}">${escapeHtml(role.title)} · ${escapeHtml(role.level)}</option>`).join("")
+    ? publishedRoles.map((role) => `<option value="${role.id}">${escapeHtml(role.title)}</option>`).join("")
     : `<option value="">Publish a role first</option>`;
 }
 
@@ -381,93 +424,154 @@ function renderRoleDetail(role) {
   if (!role) {
     roleStatus.innerHTML = "No generated role yet.";
     roleDetail.innerHTML = "";
+    roleReviewHistory.innerHTML = "";
     applyReviewBtn.disabled = true;
     publishRoleBtn.disabled = true;
     return;
   }
+  const inputSummary = role.work_summary || role.summary || "Role input summary not available yet.";
+  const courseLessons = flattenCourseLessons(role);
   roleStatus.innerHTML = `
-    <div class="card card-emphasis">
-      <div class="inline">
-        <strong>${escapeHtml(role.title)}</strong>
-        <span class="chip ${statusTone(role.status)}">${escapeHtml(titleCaseLabel(role.status))}</span>
+    <div class="review-status-card">
+      <div class="review-status-copy">
+        <p class="eyebrow">Role Overview</p>
+        <div class="inline">
+          <strong>${escapeHtml(role.title)}</strong>
+          <span class="chip ${statusTone(role.status)}">${escapeHtml(titleCaseLabel(role.status))}</span>
+        </div>
+        <div class="meta">${escapeHtml(role.segment)}</div>
+        <div class="meta">${escapeHtml(inputSummary)}</div>
+        <div class="actions review-nav">
+          <button class="secondary review-jump-btn" data-review-target="review-input-data">Input Data</button>
+          <button class="secondary review-jump-btn" data-review-target="review-learning-path">Learning Path</button>
+          <button class="secondary review-jump-btn" data-review-target="review-input-section">Review Input</button>
+        </div>
       </div>
-      <div class="meta">${escapeHtml(role.segment)} · ${escapeHtml(role.level)}</div>
-      <div class="meta">${escapeHtml(role.summary || role.legacy_mapping_notes)}</div>
+      <div class="review-status-metrics">
+        <div class="mini-stat">
+          <span class="meta">Path Sections</span>
+          <strong>${escapeHtml(role.learning_path.sections.length)}</strong>
+        </div>
+        <div class="mini-stat">
+          <span class="meta">Assessment Questions</span>
+          <strong>${escapeHtml(role.course_template.assessment.questions.length)}</strong>
+        </div>
+      </div>
     </div>
   `;
   const skillNameById = Object.fromEntries((role.skills || []).map((item) => [item.id, item.name]));
   const kpiNameById = Object.fromEntries((role.kpis || []).map((item) => [item.id, item.name]));
+  roleReviewHistory.innerHTML = role.review_notes?.length
+    ? role.review_notes.map((item, index) => `
+      <div class="review-note-card">
+        <div class="inline">
+          <strong>Review ${index + 1}</strong>
+          <span class="chip soft">Saved</span>
+        </div>
+        <div class="meta">${escapeHtml(item.text)}</div>
+      </div>
+    `).join("")
+    : `<div class="empty review-empty">No review notes added yet.</div>`;
   roleDetail.innerHTML = `
-    <div class="split-two">
-      <div class="card">
-        <h3 class="section-title">Responsibilities</h3>
-        <div class="tag-row">${role.responsibilities.map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("")}</div>
+    <section id="review-input-data" class="review-stage review-stage-box">
+      <div class="review-stage-head">
+        <div>
+          <p class="eyebrow">1. Input Data</p>
+          <h3>Role Input Data</h3>
+        </div>
+        <p class="meta">Original role details captured before course generation.</p>
       </div>
-      <div class="card">
-        <h3 class="section-title">Role Notes</h3>
-        <div class="meta">${escapeHtml(role.legacy_mapping_notes)}</div>
-      </div>
-    </div>
-    <div class="card">
-      <h3 class="section-title">Review History</h3>
-      <div class="stack">
-        ${role.review_notes?.length ? role.review_notes.map((item, index) => `
-          <div class="spotlight">
-            <strong>Review ${index + 1}</strong>
-            <div class="meta">${escapeHtml(item.text)}</div>
+      <div class="review-grid">
+        <div class="card review-card">
+          <h4 class="section-title">Role Details</h4>
+          <div class="review-key-value">
+            <div><span class="meta">Segment</span><strong>${escapeHtml(role.segment)}</strong></div>
+            <div><span class="meta">Role</span><strong>${escapeHtml(role.title)}</strong></div>
+            <div><span class="meta">Status</span><strong>${escapeHtml(titleCaseLabel(role.status))}</strong></div>
           </div>
-        `).join("") : `<div class="meta">No review notes added yet.</div>`}
-      </div>
-    </div>
-    <div class="card">
-      <h3 class="section-title">Skills</h3>
-      <div class="tag-row">${role.skills.map((item) => `<span class="chip">${escapeHtml(item.name)}</span>`).join("")}</div>
-    </div>
-    <div class="card">
-      <h3 class="section-title">KPIs</h3>
-      <div class="split-two">
-        ${role.kpis.map((kpi) => `
-          <div class="mini-stat">
-            <strong>${escapeHtml(kpi.name)}</strong>
-            <div class="meta">${escapeHtml(kpi.description)}</div>
-            <div class="meta">Target ${escapeHtml(kpi.target_value)}${escapeHtml(kpi.unit)}</div>
+        </div>
+        <div class="card review-card review-card-wide">
+          <h4 class="section-title">Work Summary</h4>
+          <div class="review-copy">${escapeHtml(role.work_summary || "No work summary added.")}</div>
+        </div>
+        <div class="card review-card">
+          <h4 class="section-title">Responsibilities</h4>
+          <div class="tag-row">${role.responsibilities.map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("")}</div>
+        </div>
+        <div class="card review-card">
+          <h4 class="section-title">Skills</h4>
+          <div class="tag-row">${role.skills.map((item) => `<span class="chip">${escapeHtml(item.name)}</span>`).join("")}</div>
+        </div>
+        <div class="card review-card review-card-wide">
+          <h4 class="section-title">KPIs</h4>
+          <div class="review-kpi-grid">
+            ${role.kpis.map((kpi) => `
+              <div class="mini-stat review-kpi-card">
+                <strong>${escapeHtml(kpi.name)}</strong>
+                <div class="meta">${escapeHtml(kpi.description)}</div>
+                <div class="meta">Target ${escapeHtml(formatTargetValue(kpi))}</div>
+                <div class="meta">Weak threshold ${escapeHtml(kpi.weak_threshold)}</div>
+              </div>
+            `).join("")}
           </div>
-        `).join("")}
+        </div>
       </div>
-    </div>
-    <div class="card">
-      <h3 class="section-title">Learning Path</h3>
+    </section>
+    <section id="review-learning-path" class="review-stage review-stage-box">
+      <div class="review-stage-head">
+        <div>
+          <p class="eyebrow">2. Learning Path</p>
+          <h3>Learner Course Preview</h3>
+        </div>
+        <p class="meta">Review the exact lesson flow the learner will see before approval.</p>
+      </div>
       <div class="stack detail-list">
-        ${role.learning_path.sections.map((section, index) => `
-          <div class="learning-path-section">
-            <div class="inline">
-              <strong>${index + 1}. ${escapeHtml(section.title)}</strong>
-              <span class="chip">${escapeHtml(titleCaseLabel(section.key))}</span>
-            </div>
-            <div class="meta">${escapeHtml(section.goal)}</div>
-            <div class="stack">
-              ${section.items.map((item) => `
-                <div class="learning-path-item">
+        ${(role.course_template.sections || []).map((section, index) => `
+          <details class="learning-path-section review-path-card" ${index === 0 ? "open" : ""}>
+            <summary class="learning-path-summary">
+              <div class="learning-path-head">
+                <div>
                   <div class="inline">
-                    <strong>${escapeHtml(item.title)}</strong>
-                    <span class="chip soft">${escapeHtml(item.resource_type)}</span>
-                    <span class="chip">${escapeHtml(item.duration_minutes)} min</span>
+                    <strong>${index + 1}. ${escapeHtml(section.title)}</strong>
+                    <span class="chip">${section.lessons.length} lessons</span>
                   </div>
-                  <div class="meta">${escapeHtml(item.description)}</div>
-                  <div class="meta">Skills: ${item.skill_ids?.length ? item.skill_ids.map((id) => escapeHtml(skillNameById[id] || id)).join(", ") : "None linked"}</div>
-                  <div class="meta">KPIs: ${item.kpi_ids?.length ? item.kpi_ids.map((id) => escapeHtml(kpiNameById[id] || id)).join(", ") : "None linked"}</div>
+                  <div class="meta">${escapeHtml(section.description)}</div>
+                </div>
+              </div>
+            </summary>
+            <div class="stack learning-path-content">
+              ${section.lessons.map((lesson) => `
+                <div class="lesson lesson-card">
+                  <div class="inline">
+                    <strong>${escapeHtml(lesson.title)}</strong>
+                    <span class="chip">${escapeHtml(lesson.resource_type)}</span>
+                    <span class="chip">${escapeHtml(lesson.duration_minutes)} min</span>
+                  </div>
+                  <div class="meta">${escapeHtml(lesson.summary)}</div>
+                  <div class="meta">Skills: ${lesson.skill_ids?.length ? lesson.skill_ids.map((id) => escapeHtml(skillNameById[id] || id)).join(", ") : "None linked"}</div>
+                  <div class="meta">KPIs: ${lesson.kpi_ids?.length ? lesson.kpi_ids.map((id) => escapeHtml(kpiNameById[id] || id)).join(", ") : "None linked"}</div>
+                  <div class="actions">
+                    ${lesson.resource_type === "video" ? `<button class="secondary trainer-review-open-video-btn" data-lesson="${lesson.id}">Open Video</button>` : ""}
+                    ${lesson.resource_type === "assignment" ? `<button class="secondary trainer-review-open-assignment-btn" data-lesson="${lesson.id}">Open Assignment</button>` : ""}
+                    ${lesson.resource_type === "document" ? `<button class="secondary trainer-review-open-lesson-btn" data-lesson="${lesson.id}">Open Lesson</button>` : ""}
+                  </div>
                 </div>
               `).join("")}
             </div>
-          </div>
+          </details>
         `).join("")}
+        <div class="card review-card">
+          <h4 class="section-title">Assessment Preview</h4>
+          <div class="meta">${role.course_template.assessment.questions.length} MCQs with learner-facing preview access from this page.</div>
+          <div class="meta">${courseLessons.filter((lesson) => lesson.resource_type === "video").length} videos · ${courseLessons.filter((lesson) => lesson.resource_type === "assignment").length} assignments · ${courseLessons.filter((lesson) => lesson.resource_type === "document").length} lessons</div>
+          <div class="actions">
+            <button class="secondary trainer-review-open-assessment-btn">Open MCQ Preview</button>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="card">
-      <h3 class="section-title">Assessment Coverage</h3>
-      <div class="meta">${role.course_template.assessment.questions.length} generated questions linked to role skills and KPIs.</div>
-    </div>
+    </section>
   `;
+  attachTrainerReviewHandlers(role);
   applyReviewBtn.disabled = false;
   publishRoleBtn.disabled = role.status === "published";
 }
@@ -503,6 +607,7 @@ function renderTrainerCoursePreview(role) {
         <div class="meta">${escapeHtml(lesson.summary)}</div>
         <div class="actions">
           <button class="secondary trainer-course-back-btn">Back To Course</button>
+          <button class="secondary trainer-open-review-btn">Back To Review</button>
           ${lesson.resource_type === "video" ? `<button class="primary trainer-open-video-btn" data-lesson="${lesson.id}">Open Video</button>` : ""}
         </div>
       </div>
@@ -540,6 +645,7 @@ function renderTrainerCoursePreview(role) {
         <div class="meta">Preview the generated MCQ bank for this role before assigning learners.</div>
         <div class="actions">
           <button class="secondary trainer-course-back-btn">Back To Course</button>
+          <button class="secondary trainer-open-review-btn">Back To Review</button>
         </div>
       </div>
       <div class="stack">
@@ -567,7 +673,6 @@ function renderTrainerCoursePreview(role) {
         <strong>${escapeHtml(role.course_template.title)}</strong>
         <span class="chip soft">Published</span>
         <span class="chip">${escapeHtml(role.segment)}</span>
-        <span class="chip">${escapeHtml(role.level)}</span>
       </div>
       <div class="meta">${escapeHtml(role.course_template.description)}</div>
       <div class="actions">
@@ -663,7 +768,7 @@ function renderTrainerRoleLibrary() {
         <span class="chip ${statusTone(role.status)}">${escapeHtml(titleCaseLabel(role.status))}</span>
         <span class="chip">${escapeHtml(role.segment)}</span>
       </div>
-      <div class="meta">${escapeHtml(role.level)} · ${escapeHtml(role.summary || role.work_summary || "")}</div>
+      <div class="meta">${escapeHtml(role.summary || role.work_summary || "")}</div>
       <div class="actions">
         <button class="secondary role-open-review" data-role-id="${role.id}">Open Review</button>
         <button class="secondary role-open-course" data-role-id="${role.id}" ${role.status !== "published" ? "disabled" : ""}>Open Course Page</button>
@@ -716,7 +821,6 @@ function renderLearnerDashboard(dashboard) {
     <div class="inline">
       <strong>${escapeHtml(dashboard.role.title)}</strong>
       <span class="chip soft">${escapeHtml(dashboard.role.segment)}</span>
-      <span class="chip">${escapeHtml(dashboard.role.level)}</span>
     </div>
     <div class="meta">${escapeHtml(dashboard.role.summary || dashboard.role.work_summary || "")}</div>
     <div class="progress-track"><div class="progress-fill" style="width:${metrics.completion_percentage}%"></div></div>
@@ -1308,6 +1412,12 @@ async function ensureStoredLessonVideo(lesson) {
   if (!blob) {
     return null;
   }
+  if (state.currentUser?.user_type === "trainer") {
+    return {
+      kind: "video_local_preview",
+      url: URL.createObjectURL(blob),
+    };
+  }
   const encoded = await blobToBase64(blob);
   const uploaded = await fetchJson(`/api/my/lessons/${lesson.id}/media`, {
     method: "POST",
@@ -1399,62 +1509,117 @@ function closeLessonPlayer() {
 function renderTrainerDashboard(data) {
   const summary = data.summary || {};
   const roleItems = data.role_metrics || [];
+  const activeRoleItems = roleItems.filter((item) => (item.learner_count || 0) > 0);
+  const rolesNeedingAttention = activeRoleItems.filter((item) => (item.completion_percentage || 0) < 80);
   const topRoleByCompletion = [...roleItems].sort((a, b) => (b.completion_percentage || 0) - (a.completion_percentage || 0))[0];
   const topRoleByAssessment = [...roleItems]
     .filter((item) => item.latest_attempt_average !== null && item.latest_attempt_average !== undefined)
     .sort((a, b) => (b.latest_attempt_average || 0) - (a.latest_attempt_average || 0))[0];
+  const lowestRoleByCompletion = [...activeRoleItems].sort((a, b) => (a.completion_percentage || 0) - (b.completion_percentage || 0))[0];
+  const lowestRoleByAssessment = [...activeRoleItems]
+    .filter((item) => item.latest_attempt_average !== null && item.latest_attempt_average !== undefined)
+    .sort((a, b) => (a.latest_attempt_average || 0) - (b.latest_attempt_average || 0))[0];
   const weakestSkill = (data.weak_skills || [])[0];
   const weakestKpi = (data.weak_kpis || [])[0];
+  const avgLearnersPerRole = summary.roles_published ? (summary.learners || 0) / summary.roles_published : 0;
 
-  trainerSummary.innerHTML = Object.entries(data.summary).map(([key, value], index) => `
-    <div class="summary-card ${index < 2 ? "emphasis" : ""}">
-      <p class="eyebrow">${escapeHtml(titleCaseLabel(key))}</p>
-      <strong class="summary-value">${escapeHtml(value)}</strong>
+  trainerSummary.innerHTML = `
+    <div class="summary-card emphasis">
+      <p class="eyebrow">Published Roles</p>
+      <strong class="summary-value">${escapeHtml(summary.roles_published ?? 0)}</strong>
+      <div class="meta">Active role academies available for assignment.</div>
     </div>
-  `).join("");
+    <div class="summary-card emphasis">
+      <p class="eyebrow">Assigned Learners</p>
+      <strong class="summary-value">${escapeHtml(summary.learners ?? 0)}</strong>
+      <div class="meta">${escapeHtml(avgLearnersPerRole.toFixed(1))} learners per published role on average.</div>
+    </div>
+    <div class="summary-card">
+      <p class="eyebrow">Completion Rate</p>
+      <strong class="summary-value">${escapeHtml(summary.course_completion_percentage ?? 0)}%</strong>
+      <div class="meta">${escapeHtml(rolesNeedingAttention.length)} roles are below the expected completion mark.</div>
+    </div>
+    <div class="summary-card">
+      <p class="eyebrow">Assessment Quality</p>
+      <strong class="summary-value">${escapeHtml(summary.assessment_average ?? "--")}</strong>
+      <div class="meta">Latest learner attempt average across active roles.</div>
+    </div>
+  `;
 
   trainerOverviewDetail.innerHTML = `
-    <div class="split-two">
-      <div class="mini-stat">
-        <span class="meta">Published roles</span>
-        <strong>${escapeHtml(summary.roles_published ?? 0)}</strong>
+    <div class="card">
+      <h3 class="section-title">Coverage</h3>
+      <div class="metric-row">
+        <div>
+          <strong>Role adoption</strong>
+          <div class="meta">${escapeHtml(activeRoleItems.length)} roles currently have learners assigned.</div>
+        </div>
+        <span class="chip soft">${escapeHtml(summary.roles_published ?? 0)} roles</span>
       </div>
-      <div class="mini-stat">
-        <span class="meta">Learners in platform</span>
-        <strong>${escapeHtml(summary.learners ?? 0)}</strong>
-      </div>
-      <div class="mini-stat">
-        <span class="meta">Completion health</span>
-        <strong>${escapeHtml(summary.course_completion_percentage ?? 0)}%</strong>
-      </div>
-      <div class="mini-stat">
-        <span class="meta">Assessment average</span>
-        <strong>${escapeHtml(summary.assessment_average ?? "--")}</strong>
+      <div class="metric-row">
+        <div>
+          <strong>Learner distribution</strong>
+          <div class="meta">${escapeHtml(avgLearnersPerRole.toFixed(1))} learners per published role.</div>
+        </div>
+        <span class="chip">${escapeHtml(summary.learners ?? 0)} learners</span>
       </div>
     </div>
     <div class="card">
-      <h3 class="section-title">Operational status</h3>
-      <div class="meta">Open remediation assignments: ${escapeHtml(summary.open_remediation_assignments ?? 0)}</div>
-      <div class="meta">Current weak KPI observations: ${escapeHtml(summary.weak_kpi_observations ?? 0)}</div>
+      <h3 class="section-title">Learning Health</h3>
+      <div class="metric-row">
+        <div>
+          <strong>Completion health</strong>
+          <div class="meta">Overall progress across all assigned course lessons.</div>
+        </div>
+        <span class="chip ${(summary.course_completion_percentage ?? 0) >= 80 ? "soft" : "warn"}">${escapeHtml(summary.course_completion_percentage ?? 0)}%</span>
+      </div>
+      <div class="metric-row">
+        <div>
+          <strong>Assessment quality</strong>
+          <div class="meta">Latest average attempt score across active learners.</div>
+        </div>
+        <span class="chip ${((summary.assessment_average ?? 0) >= 75) ? "soft" : "warn"}">${escapeHtml(summary.assessment_average ?? "--")}</span>
+      </div>
+    </div>
+    <div class="card">
+      <h3 class="section-title">Risk Signals</h3>
+      <div class="metric-row">
+        <div>
+          <strong>Open improvement plans</strong>
+          <div class="meta">Learners with unresolved KPI-driven follow-up learning.</div>
+        </div>
+        <span class="chip ${(summary.open_remediation_assignments ?? 0) > 0 ? "warn" : "soft"}">${escapeHtml(summary.open_remediation_assignments ?? 0)}</span>
+      </div>
+      <div class="metric-row">
+        <div>
+          <strong>Current weak KPI observations</strong>
+          <div class="meta">Latest KPI observations still under target.</div>
+        </div>
+        <span class="chip ${(summary.weak_kpi_observations ?? 0) > 0 ? "warn" : "soft"}">${escapeHtml(summary.weak_kpi_observations ?? 0)}</span>
+      </div>
     </div>
   `;
 
   trainerInsights.innerHTML = `
     <div class="spotlight">
-      <strong>Best completion role</strong>
-      <div class="meta">${topRoleByCompletion ? `${escapeHtml(topRoleByCompletion.role_title)} · ${escapeHtml(topRoleByCompletion.completion_percentage)}% complete` : "No published role completion data yet."}</div>
+      <strong>Role needing completion focus</strong>
+      <div class="meta">${lowestRoleByCompletion ? `${escapeHtml(lowestRoleByCompletion.role_title)} is at ${escapeHtml(lowestRoleByCompletion.completion_percentage)}% completion.` : "No role has active learner progress yet."}</div>
     </div>
     <div class="spotlight">
-      <strong>Best assessment role</strong>
-      <div class="meta">${topRoleByAssessment ? `${escapeHtml(topRoleByAssessment.role_title)} · ${escapeHtml(topRoleByAssessment.latest_attempt_average)} average score` : "No assessment attempts recorded yet."}</div>
+      <strong>Role needing assessment support</strong>
+      <div class="meta">${lowestRoleByAssessment ? `${escapeHtml(lowestRoleByAssessment.role_title)} is averaging ${escapeHtml(lowestRoleByAssessment.latest_attempt_average)} in the latest attempts.` : "No assessment attempts recorded yet."}</div>
     </div>
     <div class="spotlight">
-      <strong>Weakest repeated skill</strong>
-      <div class="meta">${weakestSkill ? `${escapeHtml(weakestSkill.label)} · ${escapeHtml(weakestSkill.count)} repeated weak hits` : "No weak skill pattern recorded yet."}</div>
+      <strong>Most repeated weak skill</strong>
+      <div class="meta">${weakestSkill ? `${escapeHtml(weakestSkill.label)} is recurring ${escapeHtml(weakestSkill.count)} times across learner attempts.` : "No repeated weak skill pattern recorded yet."}</div>
     </div>
     <div class="spotlight">
       <strong>Most exposed KPI</strong>
-      <div class="meta">${weakestKpi ? `${escapeHtml(weakestKpi.label)} · ${escapeHtml(weakestKpi.count)} weak signals` : "No weak KPI pattern recorded yet."}</div>
+      <div class="meta">${weakestKpi ? `${escapeHtml(weakestKpi.label)} is the KPI with the highest repeated weakness at ${escapeHtml(weakestKpi.count)} signals.` : "No weak KPI pattern recorded yet."}</div>
+    </div>
+    <div class="spotlight">
+      <strong>Best performing role</strong>
+      <div class="meta">${topRoleByCompletion ? `${escapeHtml(topRoleByCompletion.role_title)} leads on completion at ${escapeHtml(topRoleByCompletion.completion_percentage)}%.` : "No published role completion data yet."}</div>
     </div>
   `;
 
@@ -1479,40 +1644,19 @@ function renderTrainerDashboard(data) {
         </div>
         <div class="mini-stat">
           <span class="meta">Current status</span>
-          <strong>${(item.completion_percentage || 0) >= 80 ? "On Track" : "Needs Focus"}</strong>
+          <strong>${(item.learner_count || 0) === 0 ? "No Learners" : ((item.completion_percentage || 0) >= 80 ? "On Track" : "Needs Focus")}</strong>
         </div>
+      </div>
+      <div class="meta">
+        ${(item.learner_count || 0) === 0
+          ? "No learners assigned to this role yet."
+          : ((item.completion_percentage || 0) >= 80
+            ? "Learner progress is healthy for this role."
+            : "Completion is below target and needs trainer attention.")}
       </div>
       <div class="progress-track"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, item.completion_percentage || 0))}%"></div></div>
     </div>
   `).join("") || `<div class="empty">No trainer metrics yet.</div>`;
-  hotspots.innerHTML = `
-    <div class="split-two">
-      <div class="card">
-        <h3 class="section-title">Weak Skills</h3>
-        ${(data.weak_skills || []).length ? data.weak_skills.map((item, index) => `
-          <div class="metric-row">
-            <div>
-              <strong>${index + 1}. ${escapeHtml(item.label)}</strong>
-              <div class="meta">${escapeHtml(item.count)} repeated weak outcomes</div>
-            </div>
-            <span class="chip warn">${escapeHtml(item.count)}</span>
-          </div>
-        `).join("") : `<div class="meta">No weak skills recorded.</div>`}
-      </div>
-      <div class="card">
-        <h3 class="section-title">Weak KPIs</h3>
-        ${(data.weak_kpis || []).length ? data.weak_kpis.map((item, index) => `
-          <div class="metric-row">
-            <div>
-              <strong>${index + 1}. ${escapeHtml(item.label)}</strong>
-              <div class="meta">${escapeHtml(item.count)} weak KPI signals</div>
-            </div>
-            <span class="chip warn">${escapeHtml(item.count)}</span>
-          </div>
-        `).join("") : `<div class="meta">No weak KPIs recorded.</div>`}
-      </div>
-    </div>
-  `;
 }
 
 async function refreshTrainerData() {
@@ -1614,8 +1758,8 @@ roleForm.addEventListener("submit", async (event) => {
   const payload = {
     segment: formData.get("segment"),
     title: formData.get("title"),
-    level: formData.get("level"),
-    legacy_mappings: parseLines(formData.get("legacy_mappings")),
+    level: "",
+    legacy_mappings: [],
     work_summary: formData.get("work_summary"),
     responsibilities: parseLines(formData.get("responsibilities")),
     skills: parseLines(formData.get("skills")),
@@ -1668,6 +1812,7 @@ reviewBackToRolesBtn.addEventListener("click", () => {
 learnerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const payload = Object.fromEntries(new FormData(learnerForm).entries());
+  delete payload.org_unit;
   try {
     const res = await fetchJson("/api/users", { method: "POST", body: JSON.stringify(payload) });
     adminSummary.insertAdjacentHTML(
