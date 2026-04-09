@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LMS Engine Control Room</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="bg-orb orb-a"></div>
+  <div class="bg-orb orb-b"></div>
+  <main class="shell">
+    <section class="hero card">
+      <div class="hero-copy">
+        <p class="eyebrow">Cultfit Role-Readiness Engine</p>
+        <h1>Learning that reacts to weak KPIs and keeps improving itself.</h1>
+        <p class="lede">
+          The first loop remediates employee gaps. The second loop helps the LMS manager
+          identify what keeps failing across the org and upgrade the content system.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <button id="seed-demo" class="primary">Load Demo Data</button>
+        <button id="refresh-dashboard" class="secondary">Refresh Dashboard</button>
+      </div>
+    </section>
+
+    <section class="stats" id="summary-cards"></section>
+
+    <section class="grid">
+      <article class="card panel learner-panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Loop 1</p>
+            <h2>Learner Remediation</h2>
+          </div>
+          <select id="employee-select"></select>
+        </div>
+        <p class="panel-copy">
+          When KPI performance drops, the engine links the weak KPI back to competencies and suggests the most relevant content and validation.
+        </p>
+        <div id="employee-readiness" class="mini-banner"></div>
+        <div id="employee-analysis" class="stack"></div>
+      </article>
+
+      <article class="card panel manager-panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Loop 2</p>
+            <h2>LMS Manager Improvement View</h2>
+          </div>
+        </div>
+        <p class="panel-copy">
+          This view highlights KPIs that stay weak across the org, so L&amp;D can improve the linked learning assets and assessments.
+        </p>
+        <div id="manager-insights" class="stack"></div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card panel compact">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">System Shape</p>
+            <h2>Core Model</h2>
+          </div>
+        </div>
+        <ul class="plain-list">
+          <li><strong>Role</strong> defines the job context.</li>
+          <li><strong>Competency</strong> defines what the person must be able to do.</li>
+          <li><strong>Evidence</strong> proves the competency exists.</li>
+          <li><strong>KPI analysis</strong> detects where performance is still weak.</li>
+          <li><strong>Improvement insights</strong> show where the platform itself needs refinement.</li>
+        </ul>
+      </article>
+
+      <article class="card panel compact">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Current API</p>
+            <h2>Live Backend Modules</h2>
+          </div>
+        </div>
+        <ul class="plain-list" id="module-list">
+          <li>Role framework management</li>
+          <li>Learning catalog and assessments</li>
+          <li>Employee creation</li>
+          <li>Evidence capture and readiness scoring</li>
+          <li>KPI observation and remediation analysis</li>
+          <li>LMS manager weak-pattern reporting</li>
+        </ul>
+      </article>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
