@@ -542,6 +542,23 @@ button:disabled {
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
 }
 
+.studio-layout {
+  align-items: start;
+}
+
+.studio-item-card.is-active,
+.studio-version-active {
+  border-color: #99f6e4;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+}
+
+.studio-video-player {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #0f172a;
+}
+
 .scroll-panel {
   max-height: 360px;
   overflow-y: auto;

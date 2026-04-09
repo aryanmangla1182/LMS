@@ -19,6 +19,14 @@ const state = {
     mode: "overview",
     lessonId: null,
   },
+  kpiStudio: {
+    items: [],
+    activeItemId: null,
+    activeVersionId: null,
+    roleName: "",
+    isGenerating: false,
+    lastError: "",
+  },
   activeSubtabs: {
     admin: "trainer-role-input",
     learner: "learner-course",
@@ -55,6 +63,9 @@ const roleSelect = document.getElementById("role-select");
 const trainerCoursePreview = document.getElementById("trainer-course-preview");
 const trainerRoleLibrary = document.getElementById("trainer-role-library");
 const backToRolesBtn = document.getElementById("back-to-roles-btn");
+const kpiStudioSummary = document.getElementById("kpi-studio-summary");
+const kpiStudioList = document.getElementById("kpi-studio-list");
+const kpiStudioDetail = document.getElementById("kpi-studio-detail");
 const adminSummary = document.getElementById("admin-summary");
 const learnerCourseTitle = document.getElementById("learner-course-title");
 const learnerReviewBackBtn = document.getElementById("learner-review-back-btn");
@@ -200,6 +211,19 @@ function currentSelectedRole() {
   return state.roles.find((role) => role.id === state.selectedRoleId) || null;
 }
 
+function currentStudioItem() {
+  return state.kpiStudio.items.find((item) => item.id === state.kpiStudio.activeItemId) || state.kpiStudio.items[0] || null;
+}
+
+function currentStudioVersion(item) {
+  if (!item) {
+    return null;
+  }
+  return item.video_versions.find((version) => version.id === state.kpiStudio.activeVersionId)
+    || item.video_versions[item.video_versions.length - 1]
+    || null;
+}
+
 function assignmentPromptsForLesson(lesson) {
   if (lesson.assignment_prompts?.length) {
     return lesson.assignment_prompts;
@@ -248,6 +272,9 @@ function setSubtab(group, panelId) {
 subtabPanels.forEach((panel) => {
     panel.classList.toggle("active", panel.dataset.group === group && panel.id === panelId);
   });
+  if (group === "admin" && panelId === "trainer-review") {
+    renderKpiStudio();
+  }
 }
 
 subtabs.forEach((tab) => {
@@ -395,8 +422,6 @@ function renderRoleDetail(role) {
       <div class="meta">${escapeHtml(role.summary || role.legacy_mapping_notes)}</div>
     </div>
   `;
-  const skillNameById = Object.fromEntries((role.skills || []).map((item) => [item.id, item.name]));
-  const kpiNameById = Object.fromEntries((role.kpis || []).map((item) => [item.id, item.name]));
   roleDetail.innerHTML = `
     <div class="split-two">
       <div class="card">
@@ -434,38 +459,6 @@ function renderRoleDetail(role) {
           </div>
         `).join("")}
       </div>
-    </div>
-    <div class="card">
-      <h3 class="section-title">Learning Path</h3>
-      <div class="stack detail-list">
-        ${role.learning_path.sections.map((section, index) => `
-          <div class="learning-path-section">
-            <div class="inline">
-              <strong>${index + 1}. ${escapeHtml(section.title)}</strong>
-              <span class="chip">${escapeHtml(titleCaseLabel(section.key))}</span>
-            </div>
-            <div class="meta">${escapeHtml(section.goal)}</div>
-            <div class="stack">
-              ${section.items.map((item) => `
-                <div class="learning-path-item">
-                  <div class="inline">
-                    <strong>${escapeHtml(item.title)}</strong>
-                    <span class="chip soft">${escapeHtml(item.resource_type)}</span>
-                    <span class="chip">${escapeHtml(item.duration_minutes)} min</span>
-                  </div>
-                  <div class="meta">${escapeHtml(item.description)}</div>
-                  <div class="meta">Skills: ${item.skill_ids?.length ? item.skill_ids.map((id) => escapeHtml(skillNameById[id] || id)).join(", ") : "None linked"}</div>
-                  <div class="meta">KPIs: ${item.kpi_ids?.length ? item.kpi_ids.map((id) => escapeHtml(kpiNameById[id] || id)).join(", ") : "None linked"}</div>
-                </div>
-              `).join("")}
-            </div>
-          </div>
-        `).join("")}
-      </div>
-    </div>
-    <div class="card">
-      <h3 class="section-title">Assessment Coverage</h3>
-      <div class="meta">${role.course_template.assessment.questions.length} generated questions linked to role skills and KPIs.</div>
     </div>
   `;
   applyReviewBtn.disabled = false;
@@ -700,6 +693,282 @@ function renderTrainerRoleLibrary() {
       setSubtab("admin", "trainer-role-course");
     });
   });
+}
+
+function renderKpiStudio() {
+  if (!kpiStudioSummary || !kpiStudioList || !kpiStudioDetail) {
+    return;
+  }
+
+  const items = state.kpiStudio.items || [];
+  const activeItem = currentStudioItem();
+  if (activeItem && state.kpiStudio.activeItemId !== activeItem.id) {
+    state.kpiStudio.activeItemId = activeItem.id;
+  }
+  const activeVersion = currentStudioVersion(activeItem);
+  if (activeVersion && state.kpiStudio.activeVersionId !== activeVersion.id) {
+    state.kpiStudio.activeVersionId = activeVersion.id;
+  }
+
+  const approvedCount = items.filter((item) => item.published).length;
+  const generatedCount = items.filter((item) => (item.video_versions || []).length > 0).length;
+  kpiStudioSummary.innerHTML = `
+    <div class="card">
+      <div class="inline">
+        <strong>${escapeHtml(state.kpiStudio.roleName || activeItem?.role_name || "Role pending")}</strong>
+        <span class="chip soft">${items.length} KPI tracks</span>
+        <span class="chip">${generatedCount} videos generated</span>
+        <span class="chip ${approvedCount ? "soft" : "warn"}">${approvedCount} approved</span>
+      </div>
+      <div class="meta">Create one training video per KPI, refine a selected draft with feedback, then approve the final version to unlock the quiz.</div>
+      <div class="actions">
+        <button class="primary studio-generate-all-btn" ${state.kpiStudio.isGenerating || !items.length ? "disabled" : ""}>Generate Missing Videos</button>
+        ${state.kpiStudio.isGenerating ? `<span class="chip warn">Generating in sequence...</span>` : ""}
+      </div>
+      ${state.kpiStudio.lastError ? `<div class="empty">${escapeHtml(state.kpiStudio.lastError)}</div>` : ""}
+    </div>
+  `;
+
+  if (!items.length) {
+    kpiStudioList.innerHTML = `<div class="empty">Submit the role form to create KPI video drafts.</div>`;
+    kpiStudioDetail.innerHTML = `<div class="empty">Select a KPI once the studio session is ready.</div>`;
+    return;
+  }
+
+  kpiStudioList.innerHTML = items.map((item) => {
+    const latestVersion = item.video_versions[item.video_versions.length - 1];
+    const status = item.published ? "approved" : latestVersion ? latestVersion.status : item.studio_status;
+    return `
+      <div class="card role-card-clickable studio-item-card ${item.id === state.kpiStudio.activeItemId ? "is-active" : ""}" data-studio-item="${item.id}">
+        <div class="inline">
+          <strong>${escapeHtml(item.kpi_name)}</strong>
+          <span class="chip ${item.published ? "soft" : statusTone(status)}">${escapeHtml(titleCaseLabel(status))}</span>
+        </div>
+        <div class="meta">${escapeHtml(item.category)} · ${escapeHtml(item.training_objective)}</div>
+        <div class="meta">${item.video_versions.length} version(s) ${latestVersion?.generation_job?.error ? `· ${escapeHtml(latestVersion.generation_job.error)}` : ""}</div>
+        <div class="actions">
+          <button class="secondary studio-item-open-btn" data-item="${item.id}">Open</button>
+          <button class="secondary studio-item-generate-btn" data-item="${item.id}" ${state.kpiStudio.isGenerating ? "disabled" : ""}>${item.video_versions.length ? "Regenerate" : "Generate"}</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  if (!activeItem) {
+    kpiStudioDetail.innerHTML = `<div class="empty">Select a KPI to review its training video.</div>`;
+    return;
+  }
+
+  const versionCards = (activeItem.video_versions || []).map((version) => `
+    <button class="secondary studio-version-btn ${version.id === state.kpiStudio.activeVersionId ? "studio-version-active" : ""}" data-version="${version.id}">
+      V${escapeHtml(version.version_number)} · ${escapeHtml(titleCaseLabel(version.status))}
+    </button>
+  `).join("");
+  const quizMarkup = activeItem.quiz ? `
+    <div class="card">
+      <div class="inline">
+        <strong>Approved Quiz</strong>
+        <span class="chip soft">${activeItem.quiz.questions.length} questions</span>
+      </div>
+      <div class="stack">
+        ${activeItem.quiz.questions.map((question, index) => `
+          <div class="question">
+            <strong>Q${index + 1}. ${escapeHtml(question.prompt)}</strong>
+            <div class="question-options">
+              ${question.options.map((option, optionIndex) => `
+                <div class="question-option ${optionIndex === question.correct_option_index ? "selected" : ""}">
+                  <span>${escapeHtml(option)}</span>
+                </div>
+              `).join("")}
+            </div>
+            <div class="meta">${escapeHtml(question.explanation)}</div>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  ` : `<div class="card"><strong>Quiz pending</strong><div class="meta">Approve a video version for this KPI to generate the quiz.</div></div>`;
+
+  kpiStudioDetail.innerHTML = `
+    <div class="card">
+      <div class="inline">
+        <strong>${escapeHtml(activeItem.kpi_name)}</strong>
+        <span class="chip">${escapeHtml(activeItem.category)}</span>
+        ${activeItem.published ? `<span class="chip soft">Approved</span>` : ""}
+      </div>
+      <div class="meta">${escapeHtml(activeItem.training_objective)}</div>
+      <div class="meta">Role: ${escapeHtml(activeItem.role_name || state.kpiStudio.roleName || "Pending")}</div>
+      ${versionCards ? `<div class="actions">${versionCards}</div>` : ""}
+    </div>
+    ${activeVersion ? `
+      <div class="card">
+        <div class="inline">
+          <strong>Version ${escapeHtml(activeVersion.version_number)}</strong>
+          <span class="chip ${statusTone(activeVersion.status)}">${escapeHtml(titleCaseLabel(activeVersion.status))}</span>
+          <span class="chip">${escapeHtml(activeVersion.generation_job.provider)}</span>
+        </div>
+        <div class="meta">${escapeHtml(activeVersion.operator_notes || "Initial video draft for this KPI.")}</div>
+        ${activeVersion.video_url ? `<video class="studio-video-player" src="${escapeHtml(activeVersion.video_url)}" controls playsinline></video>` : `<div class="empty">Video file is not ready yet.</div>`}
+        <div class="stack">
+          ${(activeVersion.scene_plan || []).map((scene) => `
+            <div class="spotlight">
+              <div class="inline">
+                <strong>Scene ${escapeHtml(scene.scene_number)}. ${escapeHtml(scene.title)}</strong>
+                <span class="chip">${escapeHtml(scene.duration_seconds)}s</span>
+              </div>
+              <div class="meta">${escapeHtml(scene.narration)}</div>
+            </div>
+          `).join("")}
+        </div>
+        <div class="actions">
+          <button class="primary studio-approve-btn" ${activeItem.published ? "disabled" : ""}>Approve Video</button>
+          <button class="secondary studio-reopen-btn" ${activeItem.published ? "" : "disabled"}>Reopen KPI</button>
+        </div>
+      </div>
+      <form class="form studio-feedback-form">
+        <label>Feedback For Changes
+          <textarea name="revision_prompt" rows="4" placeholder="Example: add stronger floor examples, simplify the closing coaching cue."></textarea>
+        </label>
+        <div class="actions">
+          <button type="submit" class="primary" ${state.kpiStudio.isGenerating ? "disabled" : ""}>Create Revised Video</button>
+        </div>
+      </form>
+    ` : `
+      <div class="empty">No video generated yet for this KPI. Generate the first version to start review.</div>
+    `}
+    ${quizMarkup}
+  `;
+
+  document.querySelector(".studio-generate-all-btn")?.addEventListener("click", () => {
+    generateMissingStudioVideos().catch((error) => alert(error.message));
+  });
+  document.querySelectorAll(".studio-item-open-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.kpiStudio.activeItemId = button.dataset.item;
+      state.kpiStudio.activeVersionId = null;
+      renderKpiStudio();
+    });
+  });
+  document.querySelectorAll(".studio-item-generate-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      generateStudioVideo(button.dataset.item).catch((error) => alert(error.message));
+    });
+  });
+  document.querySelectorAll(".studio-item-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      state.kpiStudio.activeItemId = card.dataset.studioItem;
+      state.kpiStudio.activeVersionId = null;
+      renderKpiStudio();
+    });
+  });
+  document.querySelectorAll(".studio-version-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.kpiStudio.activeVersionId = button.dataset.version;
+      renderKpiStudio();
+    });
+  });
+  document.querySelector(".studio-approve-btn")?.addEventListener("click", () => {
+    approveStudioVideo().catch((error) => alert(error.message));
+  });
+  document.querySelector(".studio-reopen-btn")?.addEventListener("click", () => {
+    reopenStudioItem().catch((error) => alert(error.message));
+  });
+  document.querySelector(".studio-feedback-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const revisionPrompt = String(formData.get("revision_prompt") || "").trim();
+    generateStudioVideo(activeItem.id, revisionPrompt).catch((error) => alert(error.message));
+  });
+}
+
+async function refreshKpiStudio() {
+  const res = await fetchJson("/studio/kpis");
+  state.kpiStudio.items = res.items;
+  if (!state.kpiStudio.activeItemId || !state.kpiStudio.items.some((item) => item.id === state.kpiStudio.activeItemId)) {
+    state.kpiStudio.activeItemId = state.kpiStudio.items[0]?.id || null;
+  }
+  const activeItem = currentStudioItem();
+  if (activeItem) {
+    state.kpiStudio.roleName = activeItem.role_name || state.kpiStudio.roleName;
+    const activeVersion = currentStudioVersion(activeItem);
+    state.kpiStudio.activeVersionId = activeVersion?.id || null;
+  }
+  renderKpiStudio();
+}
+
+async function generateStudioVideo(itemId, revisionPrompt = "") {
+  const item = state.kpiStudio.items.find((entry) => entry.id === itemId);
+  const roleName = state.kpiStudio.roleName || item?.role_name || currentSelectedRole()?.title || "";
+  state.kpiStudio.isGenerating = true;
+  state.kpiStudio.lastError = "";
+  renderKpiStudio();
+  try {
+    const res = await fetchJson(`/studio/kpis/${itemId}/versions`, {
+      method: "POST",
+      body: JSON.stringify({ role_name: roleName, revision_prompt: revisionPrompt }),
+    });
+    state.kpiStudio.activeItemId = itemId;
+    state.kpiStudio.activeVersionId = res.item.id;
+    await refreshKpiStudio();
+  } catch (error) {
+    state.kpiStudio.lastError = error.message;
+    renderKpiStudio();
+    throw error;
+  } finally {
+    state.kpiStudio.isGenerating = false;
+    renderKpiStudio();
+  }
+}
+
+async function generateMissingStudioVideos() {
+  if (state.kpiStudio.isGenerating) {
+    return;
+  }
+  state.kpiStudio.isGenerating = true;
+  state.kpiStudio.lastError = "";
+  renderKpiStudio();
+  try {
+    for (const item of state.kpiStudio.items.filter((entry) => !(entry.video_versions || []).length)) {
+      const res = await fetchJson(`/studio/kpis/${item.id}/versions`, {
+        method: "POST",
+        body: JSON.stringify({ role_name: state.kpiStudio.roleName || item.role_name }),
+      });
+      state.kpiStudio.activeItemId = item.id;
+      state.kpiStudio.activeVersionId = res.item.id;
+      await refreshKpiStudio();
+    }
+  } catch (error) {
+    state.kpiStudio.lastError = error.message;
+    renderKpiStudio();
+    throw error;
+  } finally {
+    state.kpiStudio.isGenerating = false;
+    renderKpiStudio();
+  }
+}
+
+async function approveStudioVideo() {
+  const item = currentStudioItem();
+  const version = currentStudioVersion(item);
+  if (!item || !version) {
+    return;
+  }
+  await fetchJson(`/studio/kpis/${item.id}/versions/${version.id}/approve`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  await refreshKpiStudio();
+}
+
+async function reopenStudioItem() {
+  const item = currentStudioItem();
+  if (!item) {
+    return;
+  }
+  await fetchJson(`/studio/kpis/${item.id}/reopen`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  await refreshKpiStudio();
 }
 
 function renderLearnerDashboard(dashboard) {
@@ -1622,10 +1891,23 @@ roleForm.addEventListener("submit", async (event) => {
     kpis: parseKpis(formData.get("kpis")),
   };
   try {
-    const res = await fetchJson("/api/roles/generate", { method: "POST", body: JSON.stringify(payload) });
-    state.selectedRoleId = res.item.id;
+    const [roleRes, studioRes] = await Promise.all([
+      fetchJson("/api/roles/generate", { method: "POST", body: JSON.stringify(payload) }),
+      fetchJson("/studio/session", {
+        method: "POST",
+        body: JSON.stringify({ ...payload, role_name: payload.title }),
+      }),
+    ]);
+    state.selectedRoleId = roleRes.item.id;
+    state.kpiStudio.items = studioRes.items;
+    state.kpiStudio.roleName = String(payload.title || "");
+    state.kpiStudio.activeItemId = studioRes.items[0]?.id || null;
+    state.kpiStudio.activeVersionId = null;
+    state.kpiStudio.lastError = "";
     setSubtab("admin", "trainer-review");
     await refreshTrainerData();
+    renderKpiStudio();
+    await generateMissingStudioVideos();
   } catch (error) {
     alert(error.message);
   }
@@ -1700,7 +1982,7 @@ async function bootWorkspace() {
   showWorkspace();
   setVisibilityForUser();
   if (state.currentUser.user_type === "trainer") {
-    await refreshTrainerData();
+    await Promise.all([refreshTrainerData(), refreshKpiStudio()]);
   } else {
     await refreshLearnerData();
   }
