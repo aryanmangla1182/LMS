@@ -42,6 +42,26 @@ class VideoConfigTestCase(unittest.TestCase):
         gateway = build_video_gateway(env={"LMS_VIDEO_PROVIDER": "demo"}, env_path="/tmp/missing.env")
         self.assertIsInstance(gateway, DemoVideoGateway)
 
+    def test_build_video_gateway_reads_local_elevenlabs_voice_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_path = os.path.join(temp_dir, ".env.local")
+            with open(env_path, "w", encoding="utf-8") as handle:
+                handle.write("LMS_VIDEO_PROVIDER=local\n")
+                handle.write("LMS_VOICE_PROVIDER=elevenlabs\n")
+                handle.write("ELEVENLABS_API_KEY=test-eleven-key\n")
+                handle.write("ELEVENLABS_VOICE_ID=test-voice-id\n")
+                handle.write("ELEVENLABS_MODEL_ID=eleven_multilingual_v2\n")
+                handle.write("LOCAL_VOICE_NAME=Allison\n")
+
+            gateway = build_video_gateway(env={}, env_path=env_path)
+
+        self.assertIsInstance(gateway, LocalStoryboardVideoGateway)
+        self.assertEqual(gateway.voice_provider, "elevenlabs")
+        self.assertEqual(gateway.elevenlabs_api_key, "test-eleven-key")
+        self.assertEqual(gateway.elevenlabs_voice_id, "ack0QsRaQyDLnVyMQTSd")
+        self.assertEqual(gateway.elevenlabs_model_id, "eleven_multilingual_v2")
+        self.assertEqual(gateway.local_voice_name, "Allison")
+
 
 if __name__ == "__main__":
     unittest.main()

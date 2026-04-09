@@ -1,0 +1,202 @@
+{
+  "master_video_script": "Great stores are built by great people. When you communicate well, understand customers, take initiative, and work as a team, your KPIs improve. More items per bill, higher value sales, and better conversions all come from strong skills. Focus on the customer, and the numbers will follow.",
+  "bonus_quiz_prompts": [
+    "What should you do when a product is unavailable?",
+    "How do you handle an upset customer?",
+    "How can you increase UPT?",
+    "What improves conversion rate?",
+    "Why is teamwork important in retail?"
+  ],
+  "modules": [
+    {
+      "name": "Adaptability & Problem Solving",
+      "aliases": ["Adaptability and Problem Solving"],
+      "category": "behavioral",
+      "training_objective": "Train store staff to stay calm, offer alternatives, and solve customer problems quickly.",
+      "simple_meaning": "Things do not always go as planned in a store. Adaptability means staying calm and finding solutions quickly.",
+      "scenario_setup": "A customer wants size M, but it is not available on the shelf.",
+      "scenario_bad": "Sorry, not available.",
+      "scenario_good": "Let me check alternatives for you. We have a similar style or I can arrange it from another store.",
+      "bad_behavior": "Saying not available and stopping.",
+      "good_behavior": "Offering two or three alternatives and trying to save the sale.",
+      "improvement_actions": [
+        "Always ask what can I do.",
+        "Learn product substitutes.",
+        "Stay calm under pressure."
+      ],
+      "video_script": "In retail, problems happen every day: sizes missing, long queues, and unhappy customers. What matters is how you respond. Instead of saying no, always offer a solution. Suggest alternatives, check other stores, or recommend similar products. Customers do not expect perfection. They expect effort. A problem solved well can create a loyal customer.",
+      "quiz_label": "Adaptability & Problem Solving"
+    },
+    {
+      "name": "Communication & Empathy",
+      "aliases": ["Communication and Empathy"],
+      "category": "behavioral",
+      "training_objective": "Build calm, respectful customer communication that acknowledges feelings before solving the issue.",
+      "simple_meaning": "Good communication is not just talking. It is understanding how the customer feels.",
+      "scenario_setup": "A customer says they have been waiting for ten minutes.",
+      "scenario_bad": "We are busy. Please wait.",
+      "scenario_good": "I am really sorry for the wait. Let me help you right away.",
+      "bad_behavior": "Using a defensive tone with an upset customer.",
+      "good_behavior": "Acknowledge the concern, reassure the customer, and then solve it.",
+      "improvement_actions": [
+        "Listen fully before responding.",
+        "Use a polite tone and positive body language.",
+        "Show understanding before offering a solution."
+      ],
+      "video_script": "Customers may forget what you say, but they will remember how you made them feel. Always listen carefully. If a customer is upset, do not argue. Acknowledge their concern. A simple I understand or I am sorry can calm the situation quickly. Good communication builds trust, and trust drives sales.",
+      "quiz_label": "Communication & Empathy"
+    },
+    {
+      "name": "Customer Focus & Service Excellence",
+      "aliases": ["Customer Focus and Service Excellence"],
+      "category": "behavioral",
+      "training_objective": "Help store staff engage customers proactively and guide them with relevant recommendations.",
+      "simple_meaning": "Put the customer at the center of everything you do.",
+      "scenario_setup": "A customer is browsing silently in the store.",
+      "scenario_bad": "Ignore the customer and wait for them to ask for help.",
+      "scenario_good": "Hi, are you looking for something specific or just exploring?",
+      "bad_behavior": "Passive service and no proactive engagement.",
+      "good_behavior": "Proactive engagement, smart questions, and support until purchase.",
+      "improvement_actions": [
+        "Ask simple discovery questions.",
+        "Suggest products based on need.",
+        "Follow through until the purchase is complete."
+      ],
+      "video_script": "Great service is not about waiting. It is about anticipating. Greet every customer, ask simple questions, and guide them. When you understand their need, you can recommend better. Customers do not just buy products. They buy experiences.",
+      "quiz_label": "Customer Focus & Service Excellence"
+    },
+    {
+      "name": "Initiative & Drive for Results",
+      "aliases": ["Initiative and Drive for Results"],
+      "category": "behavioral",
+      "training_objective": "Coach staff to take ownership during quiet periods and act without waiting for instructions.",
+      "simple_meaning": "Do not wait to be told. Take action.",
+      "scenario_setup": "The store is empty and there are no customers at the counter.",
+      "scenario_bad": "Stand idle and wait for instructions.",
+      "scenario_good": "Rearrange products, check stock, and engage walk-ins proactively.",
+      "bad_behavior": "Waiting for instructions instead of owning the floor.",
+      "good_behavior": "Taking ownership of sales, displays, and customer opportunities.",
+      "improvement_actions": [
+        "Set daily personal targets.",
+        "Track your performance.",
+        "Look for opportunities to improve the floor."
+      ],
+      "video_script": "Top performers do not wait. They act. Whether it is engaging a customer, fixing displays, or pushing sales, initiative makes the difference. Every small action adds up to big results.",
+      "quiz_label": "Initiative & Drive for Results"
+    },
+    {
+      "name": "Leadership & People Development",
+      "aliases": ["Leadership and People Development"],
+      "category": "behavioral",
+      "training_objective": "Train leaders to coach teammates, share knowledge, and grow capability on the floor.",
+      "simple_meaning": "Leadership is helping others grow, not just managing them.",
+      "scenario_setup": "A new staff member is struggling on the floor.",
+      "scenario_bad": "Ignore them or tell them to figure it out.",
+      "scenario_good": "Coach them, guide them, and show the correct approach.",
+      "bad_behavior": "Leaving teammates alone when they need support.",
+      "good_behavior": "Teaching, supporting, and leading by example.",
+      "improvement_actions": [
+        "Share knowledge regularly.",
+        "Give clear feedback.",
+        "Lead by example on the floor."
+      ],
+      "video_script": "Leadership is not about position. It is about impact. Help your teammates, share what you know, and lead through actions. When your team grows, your store grows.",
+      "quiz_label": "Leadership & People Development"
+    },
+    {
+      "name": "Teamwork & Collaboration",
+      "aliases": ["Teamwork and Collaboration"],
+      "category": "behavioral",
+      "training_objective": "Strengthen coordination during busy store periods so customers get a smooth experience.",
+      "simple_meaning": "Work together to win together.",
+      "scenario_setup": "Rush hour starts and the floor becomes crowded.",
+      "scenario_bad": "Everyone works separately and blames each other.",
+      "scenario_good": "Divide roles clearly across billing, floor support, and stock.",
+      "bad_behavior": "Blame culture and disconnected work during rush hour.",
+      "good_behavior": "Supporting teammates, communicating clearly, and staying aligned on goals.",
+      "improvement_actions": [
+        "Communicate clearly.",
+        "Help teammates proactively.",
+        "Stay aligned on customer and store goals."
+      ],
+      "video_script": "Retail is a team sport. During busy hours, teamwork is everything. Support each other, communicate clearly, and focus on the customer. A strong team creates a smooth experience.",
+      "quiz_label": "Teamwork & Collaboration"
+    },
+    {
+      "name": "UNIT PER TRANSACTION",
+      "aliases": ["UPT", "Units Per Transaction"],
+      "category": "commercial",
+      "training_objective": "Help staff increase items per bill by recommending relevant add-ons and combos.",
+      "simple_meaning": "Units per transaction means how many items a customer buys in one bill.",
+      "scenario_setup": "A customer chooses a T-shirt and is ready to bill.",
+      "scenario_bad": "Bill only the T-shirt and end the conversation.",
+      "scenario_good": "Suggest jeans or accessories to complete the purchase.",
+      "bad_behavior": "Only billing the first item and missing the add-on opportunity.",
+      "good_behavior": "Recommending relevant add-ons or combos that fit the main purchase.",
+      "improvement_actions": [
+        "Recommend add-ons.",
+        "Create combos.",
+        "Link the next item to the customer's main need."
+      ],
+      "video_script": "UPT is all about adding more items to a single purchase. If a customer buys one product, suggest something that goes with it. Small additions increase sales significantly.",
+      "quiz_label": "UPT"
+    },
+    {
+      "name": "AVERAGE TRANSACTION VALUE",
+      "aliases": ["ATV", "Average Transaction Value"],
+      "category": "commercial",
+      "training_objective": "Increase basket value by helping customers understand the value of better products.",
+      "simple_meaning": "Average transaction value means how much money each customer spends.",
+      "scenario_setup": "A customer chooses the cheaper option and is unsure about the premium one.",
+      "scenario_bad": "Focus only on the lower price and move to billing.",
+      "scenario_good": "Explain the quality, durability, and benefits of the premium option.",
+      "bad_behavior": "Talking only about price and missing the value story.",
+      "good_behavior": "Explaining benefits so the customer sees why the better product is worth it.",
+      "improvement_actions": [
+        "Upsell higher-value items.",
+        "Highlight quality and benefits.",
+        "Position value before price."
+      ],
+      "video_script": "ATV increases when customers buy better products. Instead of focusing on price, explain value: durability, quality, and benefits.",
+      "quiz_label": "ATV"
+    },
+    {
+      "name": "AVERAGE SELLING PRICE",
+      "aliases": ["ASP", "Average Selling Price"],
+      "category": "commercial",
+      "training_objective": "Improve average selling price by positioning premium choices confidently and avoiding unnecessary discounting.",
+      "simple_meaning": "Average selling price means the average price per item sold.",
+      "scenario_setup": "A customer is comparing a basic item with a premium option.",
+      "scenario_bad": "Push the cheapest option immediately or discount too early.",
+      "scenario_good": "Position the premium option as a better choice with clear value.",
+      "bad_behavior": "Over-discounting and leading with the lowest-price option.",
+      "good_behavior": "Confidently positioning premium products as the better choice.",
+      "improvement_actions": [
+        "Push premium products.",
+        "Avoid over-discounting.",
+        "Explain why the premium option is better."
+      ],
+      "video_script": "ASP improves when you sell higher-value products. Always position premium options as better choices, not expensive ones.",
+      "quiz_label": "ASP"
+    },
+    {
+      "name": "CONVERSION",
+      "aliases": ["Conversion Rate", "Conv", "Conversion"],
+      "category": "commercial",
+      "training_objective": "Increase conversion by engaging visitors quickly and guiding them to a confident buying decision.",
+      "simple_meaning": "Conversion rate means how many visitors actually buy.",
+      "scenario_setup": "A customer walks into the store and starts to leave without interaction.",
+      "scenario_bad": "Do not engage, and let the customer leave.",
+      "scenario_good": "Greet quickly, ask smart questions, and guide the customer actively.",
+      "bad_behavior": "No interaction and no attempt to understand the customer's need.",
+      "good_behavior": "Fast engagement, active assistance, and guided selling.",
+      "improvement_actions": [
+        "Greet quickly.",
+        "Ask questions.",
+        "Assist actively through the buying journey."
+      ],
+      "video_script": "Conversion is about turning visitors into buyers. The faster you engage and understand the customer, the higher your chances of closing the sale.",
+      "quiz_label": "Conversion Rate"
+    }
+  ]
+}

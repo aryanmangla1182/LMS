@@ -24,6 +24,7 @@ const state = {
     activeItemId: null,
     activeVersionId: null,
     openItemIds: [],
+    openQuizItemIds: [],
     roleName: "",
     isGenerating: false,
     lastError: "",
@@ -146,20 +147,6 @@ function formatClock(milliseconds) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
-function readFileAsBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || "");
-      const marker = "base64,";
-      const index = result.indexOf(marker);
-      resolve(index >= 0 ? result.slice(index + marker.length) : result);
-    };
-    reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
-    reader.readAsDataURL(file);
-  });
 }
 
 function stopAllInlineVideos() {
@@ -851,8 +838,9 @@ function renderKpiStudio() {
           V${escapeHtml(version.version_number)} · ${escapeHtml(titleCaseLabel(version.status))}
         </button>
       `).join("");
+      const isQuizOpen = Boolean(item.quiz && state.kpiStudio.openQuizItemIds.includes(item.id));
       const quizMarkup = item.quiz ? `
-        <details class="learning-path-section review-path-card studio-detail-card">
+        <details class="learning-path-section review-path-card studio-detail-card studio-quiz-card" data-quiz-item="${item.id}" ${isQuizOpen ? "open" : ""}>
           <summary class="learning-path-summary">
             <div class="learning-path-head">
               <div>
@@ -978,6 +966,21 @@ function renderKpiStudio() {
       renderKpiStudio();
     });
   });
+  document.querySelectorAll(".studio-quiz-card").forEach((card) => {
+    card.addEventListener("toggle", () => {
+      const itemId = card.dataset.quizItem;
+      if (!itemId) {
+        return;
+      }
+      if (card.open) {
+        if (!state.kpiStudio.openQuizItemIds.includes(itemId)) {
+          state.kpiStudio.openQuizItemIds = [...state.kpiStudio.openQuizItemIds, itemId];
+        }
+        return;
+      }
+      state.kpiStudio.openQuizItemIds = state.kpiStudio.openQuizItemIds.filter((openId) => openId !== itemId);
+    });
+  });
 }
 
 async function refreshKpiStudio() {
@@ -985,6 +988,9 @@ async function refreshKpiStudio() {
   state.kpiStudio.items = res.items;
   state.kpiStudio.openItemIds = state.kpiStudio.openItemIds.filter((itemId) =>
     state.kpiStudio.items.some((item) => item.id === itemId && (item.video_versions || []).length > 0)
+  );
+  state.kpiStudio.openQuizItemIds = state.kpiStudio.openQuizItemIds.filter((itemId) =>
+    state.kpiStudio.items.some((item) => item.id === itemId && item.quiz?.questions?.length)
   );
   if (!state.kpiStudio.activeItemId || !state.kpiStudio.items.some((item) => item.id === state.kpiStudio.activeItemId)) {
     state.kpiStudio.activeItemId = null;
@@ -1052,6 +1058,7 @@ async function generateStudioCourse() {
     state.kpiStudio.activeItemId = null;
     state.kpiStudio.activeVersionId = null;
     state.kpiStudio.openItemIds = [];
+    state.kpiStudio.openQuizItemIds = [];
     if (failedItems.length) {
       state.kpiStudio.lastError = `Some items could not be updated: ${failedItems.join(" | ")}`;
     }
@@ -1231,7 +1238,6 @@ function renderLearnerVoicePage(dashboard) {
   voiceView.innerHTML = renderPitchAnalyzer(dashboard);
   attachLearnerVoiceHandlers();
 }
-
 function renderLearnerDashboard(dashboard) {
   state.learnerDashboard = dashboard;
   initializeInlineVideoPlayers(dashboard);
@@ -1357,6 +1363,32 @@ function renderLearnerCoursePage(dashboard) {
   }
 
   courseView.innerHTML = `
+    <div class="grid two learner-overview-grid">
+      <div class="card">
+        <h3 class="section-title">Current Focus</h3>
+        <div class="stack">
+          <div class="spotlight">
+            <strong>${openImprovementPlan ? "Improvement plan active" : "Current focus"}</strong>
+            <div class="meta">${escapeHtml(openImprovementPlan ? openImprovementPlan.summary : "Finish the remaining lessons and complete the mastery check for your role.")}</div>
+          </div>
+          <div class="spotlight">
+            <strong>${latestAttempt ? "Latest assessment summary" : "Assessment not submitted yet"}</strong>
+            <div class="meta">${escapeHtml(latestAttempt ? latestAttempt.analysis_summary : "Complete the course first, then take the assessment to get skill and KPI analysis.")}</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="section-title">Course Status</h3>
+        <div class="metric-grid">
+          <div class="metric-item"><span class="meta">Lessons Done</span><strong>${dashboard.metrics.lessons_completed}/${dashboard.metrics.total_lessons}</strong></div>
+          <div class="metric-item"><span class="meta">Healthy KPIs</span><strong>${dashboard.metrics.healthy_kpis}</strong></div>
+        </div>
+        <div class="actions">
+          <button class="secondary learner-open-assessment-btn">Open Assessment</button>
+          <button class="secondary learner-open-kpi-btn">Record KPI</button>
+        </div>
+      </div>
+    </div>
     ${sections.map((section, index) => {
       const moduleReview = buildLearnerModuleReview(section, dashboard);
       return `
@@ -1876,128 +1908,62 @@ function closeLessonPlayer() {
 function renderTrainerDashboard(data) {
   const summary = data.summary || {};
   const roleItems = data.role_metrics || [];
-  const activeRoleItems = roleItems.filter((item) => (item.learner_count || 0) > 0);
-  const rolesNeedingAttention = activeRoleItems.filter((item) => (item.completion_percentage || 0) < 80);
   const topRoleByCompletion = [...roleItems].sort((a, b) => (b.completion_percentage || 0) - (a.completion_percentage || 0))[0];
   const topRoleByAssessment = [...roleItems]
     .filter((item) => item.latest_attempt_average !== null && item.latest_attempt_average !== undefined)
     .sort((a, b) => (b.latest_attempt_average || 0) - (a.latest_attempt_average || 0))[0];
-  const lowestRoleByCompletion = [...activeRoleItems].sort((a, b) => (a.completion_percentage || 0) - (b.completion_percentage || 0))[0];
-  const lowestRoleByAssessment = [...activeRoleItems]
-    .filter((item) => item.latest_attempt_average !== null && item.latest_attempt_average !== undefined)
-    .sort((a, b) => (a.latest_attempt_average || 0) - (b.latest_attempt_average || 0))[0];
   const weakestSkill = (data.weak_skills || [])[0];
   const weakestKpi = (data.weak_kpis || [])[0];
-  const weakestPitchTheme = (data.pitch_hotspots || [])[0];
-  const avgLearnersPerRole = summary.roles_published ? (summary.learners || 0) / summary.roles_published : 0;
-  trainerSummary.innerHTML = `
-    <div class="summary-card emphasis">
-      <p class="eyebrow">Published Roles</p>
-      <strong class="summary-value">${escapeHtml(summary.roles_published ?? 0)}</strong>
-      <div class="meta">Active role academies available for assignment.</div>
+
+  trainerSummary.innerHTML = Object.entries(data.summary).map(([key, value], index) => `
+    <div class="summary-card ${index < 2 ? "emphasis" : ""}">
+      <p class="eyebrow">${escapeHtml(titleCaseLabel(key))}</p>
+      <strong class="summary-value">${escapeHtml(value)}</strong>
     </div>
-    <div class="summary-card emphasis">
-      <p class="eyebrow">Assigned Learners</p>
-      <strong class="summary-value">${escapeHtml(summary.learners ?? 0)}</strong>
-      <div class="meta">${escapeHtml(avgLearnersPerRole.toFixed(1))} learners per published role on average.</div>
-    </div>
-    <div class="summary-card">
-      <p class="eyebrow">Completion Rate</p>
-      <strong class="summary-value">${escapeHtml(summary.course_completion_percentage ?? 0)}%</strong>
-      <div class="meta">${escapeHtml(rolesNeedingAttention.length)} roles are below the expected completion mark.</div>
-    </div>
-    <div class="summary-card">
-      <p class="eyebrow">Assessment Quality</p>
-      <strong class="summary-value">${escapeHtml(summary.assessment_average ?? "--")}</strong>
-      <div class="meta">Latest learner attempt average across active roles.</div>
-    </div>
-  `;
+  `).join("");
 
   trainerOverviewDetail.innerHTML = `
-    <div class="card">
-      <h3 class="section-title">Coverage</h3>
-      <div class="metric-row">
-        <div>
-          <strong>Role adoption</strong>
-          <div class="meta">${escapeHtml(activeRoleItems.length)} roles currently have learners assigned.</div>
-        </div>
-        <span class="chip soft">${escapeHtml(summary.roles_published ?? 0)} roles</span>
+    <div class="split-two">
+      <div class="mini-stat">
+        <span class="meta">Published roles</span>
+        <strong>${escapeHtml(summary.roles_published ?? 0)}</strong>
       </div>
-      <div class="metric-row">
-        <div>
-          <strong>Learner distribution</strong>
-          <div class="meta">${escapeHtml(avgLearnersPerRole.toFixed(1))} learners per published role.</div>
-        </div>
-        <span class="chip">${escapeHtml(summary.learners ?? 0)} learners</span>
+      <div class="mini-stat">
+        <span class="meta">Learners in platform</span>
+        <strong>${escapeHtml(summary.learners ?? 0)}</strong>
       </div>
-    </div>
-    <div class="card">
-      <h3 class="section-title">Learning Health</h3>
-      <div class="metric-row">
-        <div>
-          <strong>Completion health</strong>
-          <div class="meta">Overall progress across all assigned course lessons.</div>
-        </div>
-        <span class="chip ${(summary.course_completion_percentage ?? 0) >= 80 ? "soft" : "warn"}">${escapeHtml(summary.course_completion_percentage ?? 0)}%</span>
+      <div class="mini-stat">
+        <span class="meta">Completion health</span>
+        <strong>${escapeHtml(summary.course_completion_percentage ?? 0)}%</strong>
       </div>
-      <div class="metric-row">
-        <div>
-          <strong>Assessment quality</strong>
-          <div class="meta">Latest average attempt score across active learners.</div>
-        </div>
-        <span class="chip ${((summary.assessment_average ?? 0) >= 75) ? "soft" : "warn"}">${escapeHtml(summary.assessment_average ?? "--")}</span>
+      <div class="mini-stat">
+        <span class="meta">Assessment average</span>
+        <strong>${escapeHtml(summary.assessment_average ?? "--")}</strong>
       </div>
     </div>
     <div class="card">
-      <h3 class="section-title">Risk Signals</h3>
-      <div class="metric-row">
-        <div>
-          <strong>Open improvement plans</strong>
-          <div class="meta">Learners with unresolved KPI-driven follow-up learning.</div>
-        </div>
-        <span class="chip ${(summary.open_remediation_assignments ?? 0) > 0 ? "warn" : "soft"}">${escapeHtml(summary.open_remediation_assignments ?? 0)}</span>
-      </div>
-      <div class="metric-row">
-        <div>
-          <strong>Current weak KPI observations</strong>
-          <div class="meta">Latest KPI observations still under target.</div>
-        </div>
-        <span class="chip ${(summary.weak_kpi_observations ?? 0) > 0 ? "warn" : "soft"}">${escapeHtml(summary.weak_kpi_observations ?? 0)}</span>
-      </div>
-      <div class="metric-row">
-        <div>
-          <strong>Pitch quality average</strong>
-          <div class="meta">Average score across analyzed learner sales pitches.</div>
-        </div>
-        <span class="chip ${((summary.pitch_average ?? 0) >= 75) ? "soft" : "warn"}">${escapeHtml(summary.pitch_average ?? "--")}</span>
-      </div>
+      <h3 class="section-title">Operational status</h3>
+      <div class="meta">Open remediation assignments: ${escapeHtml(summary.open_remediation_assignments ?? 0)}</div>
+      <div class="meta">Current weak KPI observations: ${escapeHtml(summary.weak_kpi_observations ?? 0)}</div>
     </div>
   `;
 
   trainerInsights.innerHTML = `
     <div class="spotlight">
-      <strong>Role needing completion focus</strong>
-      <div class="meta">${lowestRoleByCompletion ? `${escapeHtml(lowestRoleByCompletion.role_title)} is at ${escapeHtml(lowestRoleByCompletion.completion_percentage)}% completion.` : "No role has active learner progress yet."}</div>
+      <strong>Best completion role</strong>
+      <div class="meta">${topRoleByCompletion ? `${escapeHtml(topRoleByCompletion.role_title)} · ${escapeHtml(topRoleByCompletion.completion_percentage)}% complete` : "No published role completion data yet."}</div>
     </div>
     <div class="spotlight">
-      <strong>Role needing assessment support</strong>
-      <div class="meta">${lowestRoleByAssessment ? `${escapeHtml(lowestRoleByAssessment.role_title)} is averaging ${escapeHtml(lowestRoleByAssessment.latest_attempt_average)} in the latest attempts.` : "No assessment attempts recorded yet."}</div>
+      <strong>Best assessment role</strong>
+      <div class="meta">${topRoleByAssessment ? `${escapeHtml(topRoleByAssessment.role_title)} · ${escapeHtml(topRoleByAssessment.latest_attempt_average)} average score` : "No assessment attempts recorded yet."}</div>
     </div>
     <div class="spotlight">
-      <strong>Most repeated weak skill</strong>
-      <div class="meta">${weakestSkill ? `${escapeHtml(weakestSkill.label)} is recurring ${escapeHtml(weakestSkill.count)} times across learner attempts.` : "No repeated weak skill pattern recorded yet."}</div>
+      <strong>Weakest repeated skill</strong>
+      <div class="meta">${weakestSkill ? `${escapeHtml(weakestSkill.label)} · ${escapeHtml(weakestSkill.count)} repeated weak hits` : "No weak skill pattern recorded yet."}</div>
     </div>
     <div class="spotlight">
       <strong>Most exposed KPI</strong>
-      <div class="meta">${weakestKpi ? `${escapeHtml(weakestKpi.label)} is the KPI with the highest repeated weakness at ${escapeHtml(weakestKpi.count)} signals.` : "No weak KPI pattern recorded yet."}</div>
-    </div>
-    <div class="spotlight">
-      <strong>Pitch coaching theme</strong>
-      <div class="meta">${weakestPitchTheme ? `${escapeHtml(weakestPitchTheme.label)} is the most repeated weak pitch theme across analyzed sessions.` : "No pitch coaching pattern recorded yet."}</div>
-    </div>
-    <div class="spotlight">
-      <strong>Best performing role</strong>
-      <div class="meta">${topRoleByCompletion ? `${escapeHtml(topRoleByCompletion.role_title)} leads on completion at ${escapeHtml(topRoleByCompletion.completion_percentage)}%.` : "No published role completion data yet."}</div>
+      <div class="meta">${weakestKpi ? `${escapeHtml(weakestKpi.label)} · ${escapeHtml(weakestKpi.count)} weak signals` : "No weak KPI pattern recorded yet."}</div>
     </div>
   `;
 
@@ -2019,10 +1985,6 @@ function renderTrainerDashboard(data) {
         <div class="mini-stat">
           <span class="meta">Assessment Avg</span>
           <strong>${escapeHtml(item.latest_attempt_average ?? "--")}</strong>
-        </div>
-        <div class="mini-stat">
-          <span class="meta">Pitch Avg</span>
-          <strong>${escapeHtml(item.pitch_average ?? "--")}</strong>
         </div>
         <div class="mini-stat">
           <span class="meta">Current status</span>
@@ -2229,6 +2191,9 @@ learnerForm.addEventListener("submit", async (event) => {
 });
 
 closeLessonPlayerBtn.addEventListener("click", closeLessonPlayer);
+learnerReviewBackBtn.addEventListener("click", () => {
+  setSubtab("learner", "learner-course");
+});
 lessonPlayerModal.addEventListener("click", (event) => {
   if (event.target.dataset.closeModal === "true") {
     closeLessonPlayer();

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import textwrap
 from pathlib import Path
 from typing import Iterable, List, Tuple
+from urllib import request
+from urllib.error import HTTPError, URLError
 from xml.sax.saxutils import escape
 
 from lms_engine.domain.models import VideoScenePlan
@@ -71,6 +74,63 @@ def render_voiceover(text: str, output_path: Path, voice_name: str = "Samantha")
             text,
         ]
     )
+
+
+def render_elevenlabs_voiceover(
+    text: str,
+    output_path: Path,
+    api_key: str,
+    voice_id: str,
+    model_id: str = "eleven_multilingual_v2",
+    base_url: str = "https://api.elevenlabs.io",
+) -> None:
+    payload = {
+        "text": text,
+        "model_id": model_id,
+    }
+    req = request.Request(
+        "{0}/v1/text-to-speech/{1}".format(base_url.rstrip("/"), voice_id),
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Accept": "audio/mpeg",
+            "Content-Type": "application/json",
+            "xi-api-key": api_key,
+        },
+        method="POST",
+    )
+    try:
+        with request.urlopen(req, timeout=60) as response:
+            output_path.write_bytes(response.read())
+    except HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        raise ValueError("ElevenLabs voice request failed: {0}".format(body or exc.reason)) from exc
+    except URLError as exc:
+        raise ValueError("ElevenLabs voice request failed: {0}".format(exc.reason)) from exc
+
+
+def render_voice_track(
+    text: str,
+    output_path: Path,
+    voice_provider: str = "system",
+    voice_name: str = "Samantha",
+    elevenlabs_api_key: str = "",
+    elevenlabs_voice_id: str = "",
+    elevenlabs_model_id: str = "eleven_multilingual_v2",
+) -> None:
+    if voice_provider == "elevenlabs":
+        if not elevenlabs_api_key:
+            raise ValueError("ElevenLabs voice is selected but ELEVENLABS_API_KEY is missing")
+        if not elevenlabs_voice_id:
+            raise ValueError("ElevenLabs voice is selected but ELEVENLABS_VOICE_ID is missing")
+        render_elevenlabs_voiceover(
+            text=text,
+            output_path=output_path,
+            api_key=elevenlabs_api_key,
+            voice_id=elevenlabs_voice_id,
+            model_id=elevenlabs_model_id,
+        )
+        return
+    render_voiceover(text, output_path, voice_name=voice_name)
 
 
 def wrap_svg_text(value: str, width: int, max_lines: int) -> List[str]:
@@ -194,11 +254,33 @@ def render_scene_card(scene: VideoScenePlan, output_dir: Path, scene_index: int)
     return png_path
 
 
-def render_scene_clip(scene: VideoScenePlan, output_dir: Path, scene_index: int) -> Path:
-    audio_path = output_dir / "scene_{0:02d}.aiff".format(scene.scene_number)
+def render_scene_clip(
+    scene: VideoScenePlan,
+    output_dir: Path,
+    scene_index: int,
+    voice_provider: str = "system",
+    voice_name: str = "Samantha",
+    elevenlabs_api_key: str = "",
+    elevenlabs_voice_id: str = "",
+    elevenlabs_model_id: str = "eleven_multilingual_v2",
+) -> Path:
+    audio_extension = (
+        "mp3"
+        if voice_provider == "elevenlabs" and elevenlabs_api_key and elevenlabs_voice_id
+        else "aiff"
+    )
+    audio_path = output_dir / "scene_{0:02d}.{1}".format(scene.scene_number, audio_extension)
     output_path = output_dir / "scene_{0:02d}.mp4".format(scene.scene_number)
 
-    render_voiceover(scene.narration, audio_path)
+    render_voice_track(
+        scene.narration,
+        audio_path,
+        voice_provider=voice_provider,
+        voice_name=voice_name,
+        elevenlabs_api_key=elevenlabs_api_key,
+        elevenlabs_voice_id=elevenlabs_voice_id,
+        elevenlabs_model_id=elevenlabs_model_id,
+    )
     duration = audio_duration_seconds(audio_path, scene.narration) + 0.5
     card_path = render_scene_card(scene, output_dir, scene_index)
 
@@ -265,6 +347,25 @@ def stitch_scene_clips(scene_paths: Iterable[Path], output_dir: Path) -> Path:
         ]
     )
     return final_path
+
+
+def export_final_audio_track(final_video_path: Path, output_dir: Path) -> Path:
+    audio_path = output_dir / "final_voiceover.m4a"
+    run_command(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(final_video_path),
+            "-vn",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            str(audio_path),
+        ]
+    )
+    return audio_path
 
 
 def render_mock_video_bundle(scene_plan: List[VideoScenePlan], output_dir: Path) -> Tuple[List[Path], Path]:

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import re
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from lms_engine.domain.models import (
@@ -18,57 +21,54 @@ from lms_engine.domain.models import (
 from lms_engine.integrations.video import VideoGenerationGateway
 
 
-DEFAULT_KPI_LIBRARY: Sequence[Dict[str, str]] = (
+TRAINING_GUIDE_PATH = Path(__file__).resolve().parent.parent / "data" / "kpi_training_guide.json"
+
+
+def _load_training_guide() -> Dict[str, Any]:
+    if not TRAINING_GUIDE_PATH.exists():
+        return {"modules": [], "bonus_quiz_prompts": [], "master_video_script": ""}
+    return json.loads(TRAINING_GUIDE_PATH.read_text(encoding="utf-8"))
+
+
+def _lookup_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def _compact_text(value: str, max_words: int) -> str:
+    words = value.strip().split()
+    if len(words) <= max_words:
+        return " ".join(words)
+    return "{0}...".format(" ".join(words[:max_words]))
+
+
+def _meaning_distractors(category: str) -> List[str]:
+    if category == "commercial":
+        return [
+            "How quickly billing is completed during the shift.",
+            "How many discounts are given in a day.",
+            "How many people enter the store without buying.",
+        ]
+    return [
+        "Working alone without asking questions.",
+        "Following instructions without understanding the customer.",
+        "Finishing tasks quickly even if the customer feels ignored.",
+    ]
+
+
+TRAINING_GUIDE = _load_training_guide()
+TRAINING_GUIDE_MODULES: Sequence[Dict[str, Any]] = tuple(TRAINING_GUIDE.get("modules", []))
+TRAINING_GUIDE_INDEX = {
+    _lookup_key(alias): module
+    for module in TRAINING_GUIDE_MODULES
+    for alias in [module["name"], *module.get("aliases", [])]
+}
+DEFAULT_KPI_LIBRARY: Sequence[Dict[str, str]] = tuple(
     {
-        "name": "UNIT PER TRANSACTION",
-        "category": "commercial",
-        "objective": "Coach the team to increase items per bill with confident recommendation habits.",
-    },
-    {
-        "name": "AVERAGE TRANSACTION VALUE",
-        "category": "commercial",
-        "objective": "Help the team lift basket value through better discovery and stronger bundles.",
-    },
-    {
-        "name": "AVERAGE SELLING PRICE",
-        "category": "commercial",
-        "objective": "Build confidence in premium recommendation without harming trust or service quality.",
-    },
-    {
-        "name": "CONVERSION",
-        "category": "commercial",
-        "objective": "Show how the role turns walk-ins into buying customers through better service execution.",
-    },
-    {
-        "name": "Adaptability & Problem Solving",
-        "category": "behavioral",
-        "objective": "Train the role to respond calmly when store conditions change during the shift.",
-    },
-    {
-        "name": "Communication & Empathy",
-        "category": "behavioral",
-        "objective": "Model clear, human communication with customers and team members in live situations.",
-    },
-    {
-        "name": "Customer Focus & Service Excellence",
-        "category": "behavioral",
-        "objective": "Reinforce service behaviors that improve trust, repeat visits, and stronger selling moments.",
-    },
-    {
-        "name": "Initiative & Drive for Results",
-        "category": "behavioral",
-        "objective": "Show proactive ownership habits that improve execution before performance drops further.",
-    },
-    {
-        "name": "Leadership & People Development",
-        "category": "behavioral",
-        "objective": "Demonstrate coaching rhythms that help team members improve and move to the next level.",
-    },
-    {
-        "name": "Teamwork & Collaboration",
-        "category": "behavioral",
-        "objective": "Train the role to keep team communication tight during customer and operational pressure.",
-    },
+        "name": module["name"],
+        "category": str(module["category"]),
+        "objective": str(module["training_objective"]),
+    }
+    for module in TRAINING_GUIDE_MODULES
 )
 
 
@@ -220,31 +220,43 @@ class KPIStudioService:
             fallback = str(item.get("name") or primary).strip()
             name = primary if " " in primary else fallback
             normalized_name = name.strip()
-            if not normalized_name or normalized_name.lower() in seen:
+            guide_entry = self._guide_entry_for(normalized_name)
+            canonical_name = str(guide_entry["name"]) if guide_entry else normalized_name
+            seen_key = canonical_name.lower()
+            if not canonical_name or seen_key in seen:
                 continue
-            seen.add(normalized_name.lower())
-            catalog.append(
-                {
-                    "name": normalized_name,
-                    "category": "commercial",
-                    "objective": "Train the role to improve {0} with better floor execution.".format(
-                        normalized_name.lower()
-                    ),
-                }
-            )
+            seen.add(seen_key)
+            if guide_entry:
+                catalog.append(self._catalog_entry_from_guide(guide_entry))
+            else:
+                catalog.append(
+                    {
+                        "name": canonical_name,
+                        "category": "commercial",
+                        "objective": "Train the role to improve {0} with better floor execution.".format(
+                            canonical_name.lower()
+                        ),
+                    }
+                )
 
         for skill in payload.get("skills", []) or []:
             normalized = str(skill).strip()
-            if not normalized or normalized.lower() in seen:
+            guide_entry = self._guide_entry_for(normalized)
+            canonical_name = str(guide_entry["name"]) if guide_entry else normalized
+            seen_key = canonical_name.lower()
+            if not canonical_name or seen_key in seen:
                 continue
-            seen.add(normalized.lower())
-            catalog.append(
-                {
-                    "name": normalized,
-                    "category": "behavioral",
-                    "objective": "Coach stronger {0} habits in live store situations.".format(normalized.lower()),
-                }
-            )
+            seen.add(seen_key)
+            if guide_entry:
+                catalog.append(self._catalog_entry_from_guide(guide_entry))
+            else:
+                catalog.append(
+                    {
+                        "name": canonical_name,
+                        "category": "behavioral",
+                        "objective": "Coach stronger {0} habits in live store situations.".format(canonical_name.lower()),
+                    }
+                )
 
         if catalog:
             return catalog
@@ -260,23 +272,101 @@ class KPIStudioService:
         )
 
     def _build_generation_prompt(self, item: KPIStudioItem, revision_prompt: str) -> str:
+        guide_entry = self._guide_entry_for(item.kpi_name)
         prompt = (
             "Create a {0} second training video for {1} focused on {2}. Goal: {3}."
         ).format(item.target_duration_range, item.role_name, item.kpi_name, item.training_objective)
+        if guide_entry:
+            prompt = "{0} Meaning: {1} Scenario: {2} Good behavior: {3}".format(
+                prompt,
+                guide_entry["simple_meaning"],
+                guide_entry["scenario_setup"],
+                guide_entry["good_behavior"],
+            )
         if revision_prompt:
             prompt = "{0} Revision note: {1}.".format(prompt, revision_prompt)
         return prompt
 
     def _build_script(self, item: KPIStudioItem, revision_prompt: str) -> str:
-        script = (
-            "{0} should explain why {1} matters, what great execution looks like, "
-            "how to coach the team, and how to hold the routine daily."
-        ).format(item.role_name, item.kpi_name)
+        guide_entry = self._guide_entry_for(item.kpi_name)
+        if guide_entry:
+            parts = [
+                str(guide_entry["simple_meaning"]),
+                "Scenario: {0} Bad approach: {1} Better approach: {2}".format(
+                    guide_entry["scenario_setup"],
+                    guide_entry["scenario_bad"],
+                    guide_entry["scenario_good"],
+                ),
+                "Good versus bad: bad means {0} Good means {1}".format(
+                    guide_entry["bad_behavior"],
+                    guide_entry["good_behavior"],
+                ),
+                "Improve by {0}".format(" ".join(str(action) for action in guide_entry["improvement_actions"])),
+                str(guide_entry["video_script"]),
+            ]
+            script = " ".join(parts)
+        else:
+            script = (
+                "{0} should explain why {1} matters, what great execution looks like, "
+                "how to coach the team, and how to hold the routine daily."
+            ).format(item.role_name, item.kpi_name)
         if revision_prompt:
             script = "{0} Update requested: {1}.".format(script, revision_prompt)
         return script
 
     def _build_scene_plan(self, item: KPIStudioItem, revision_prompt: str) -> List[VideoScenePlan]:
+        guide_entry = self._guide_entry_for(item.kpi_name)
+        if guide_entry:
+            actions = list(guide_entry["improvement_actions"])
+            bad_short = _compact_text(str(guide_entry["scenario_bad"]), 4)
+            good_short = _compact_text(str(guide_entry["scenario_good"]), 8)
+            good_behavior_short = _compact_text(str(guide_entry["good_behavior"]), 8)
+            simple_short = _compact_text(str(guide_entry["simple_meaning"]), 16)
+            actions_short = _compact_text(" ".join(actions), 12)
+            scene_specs = [
+                (
+                    "What this means",
+                    simple_short,
+                    "Meaning card, key term highlight, and calm presenter framing.",
+                ),
+                (
+                    "Store floor scenario",
+                    "Avoid {0}. Use {1}.".format(bad_short, good_short),
+                    "Show the customer moment, then contrast bad and good responses clearly.",
+                ),
+                (
+                    "Good versus bad",
+                    "Good looks like {0}. Offer a solution.".format(good_behavior_short),
+                    "Split-screen comparison with bad behavior on one side and good behavior on the other.",
+                ),
+                (
+                    "How to improve",
+                    "Improve this every shift: {0}".format(actions_short),
+                    "Checklist overlay, team huddle close, and clear manager coaching cue.",
+                ),
+            ]
+            if revision_prompt:
+                scene_specs[-1] = (
+                    scene_specs[-1][0],
+                    "{0} Revision note: {1}".format(scene_specs[-1][1], revision_prompt),
+                    "{0} Revision note: {1}".format(scene_specs[-1][2], revision_prompt),
+                )
+            return [
+                VideoScenePlan(
+                    scene_number=index + 1,
+                    title=title,
+                    duration_seconds=18,
+                    narration="{0} for {1}. Scene {2}: {3}".format(item.kpi_name, item.role_name, index + 1, body),
+                    visual_direction=visual,
+                    sora_prompt="Training video scene for {0} role about {1}. {2} Visual direction: {3}".format(
+                        item.role_name,
+                        item.kpi_name,
+                        body,
+                        visual,
+                    ),
+                )
+                for index, (title, body, visual) in enumerate(scene_specs)
+            ]
         scenes = [
             (
                 "Why the KPI matters",
@@ -319,6 +409,145 @@ class KPIStudioService:
         ]
 
     def _build_quiz(self, item: KPIStudioItem, version: VideoVersion) -> KPIQuiz:
+        guide_entry = self._guide_entry_for(item.kpi_name)
+        if guide_entry:
+            quiz_label = str(guide_entry.get("quiz_label") or item.kpi_name)
+            actions = list(guide_entry["improvement_actions"])
+            action_one = actions[0]
+            action_two = actions[1] if len(actions) > 1 else actions[0]
+            action_three = actions[2] if len(actions) > 2 else actions[-1]
+            scenario_good = str(guide_entry["scenario_good"])
+            scenario_bad = str(guide_entry["scenario_bad"])
+            good_behavior = str(guide_entry["good_behavior"])
+            bad_behavior = str(guide_entry["bad_behavior"])
+            training_objective = str(guide_entry["training_objective"])
+            video_script = str(guide_entry["video_script"])
+            simple_meaning = str(guide_entry["simple_meaning"])
+            common_wrong_moves = [
+                "Move straight to billing without asking one more question.",
+                "Wait for the customer to ask for help before acting.",
+                "Push a random product that does not match the need.",
+                "Use a defensive tone to end the conversation faster.",
+                "Delay action until the next review.",
+            ]
+            questions = [
+                QuizQuestion(
+                    prompt="What does {0} mean in this role?".format(quiz_label),
+                    options=[
+                        simple_meaning,
+                        *_meaning_distractors(str(guide_entry["category"])),
+                    ],
+                    correct_option_index=0,
+                    explanation=video_script,
+                ),
+                QuizQuestion(
+                    prompt="In the training scenario for {0}, what is the best next move?".format(quiz_label),
+                    options=[
+                        scenario_good,
+                        scenario_bad,
+                        common_wrong_moves[0],
+                        common_wrong_moves[1],
+                    ],
+                    correct_option_index=0,
+                    explanation="The strong example in the video shows {0}".format(good_behavior),
+                ),
+                QuizQuestion(
+                    prompt="Which response from the video weakens {0}?".format(quiz_label),
+                    options=[
+                        scenario_bad,
+                        scenario_good,
+                        action_one,
+                        action_two,
+                    ],
+                    correct_option_index=0,
+                    explanation="The weak example in the video shows {0}".format(bad_behavior),
+                ),
+                QuizQuestion(
+                    prompt="Which action would most directly strengthen {0} on the floor?".format(quiz_label),
+                    options=[
+                        action_one,
+                        common_wrong_moves[0],
+                        common_wrong_moves[2],
+                        common_wrong_moves[4],
+                    ],
+                    correct_option_index=0,
+                    explanation="The guide says to improve by {0}".format(action_one.lower()),
+                ),
+                QuizQuestion(
+                    prompt="Which coaching habit from the guide supports {0} consistently?".format(quiz_label),
+                    options=[
+                        action_two,
+                        "Stop helping once the first option fails.",
+                        "Use the same line for every customer without listening.",
+                        "Let the opportunity pass if the store is busy.",
+                    ],
+                    correct_option_index=0,
+                    explanation="This action supports the skill or KPI in daily execution.",
+                ),
+                QuizQuestion(
+                    prompt="What is the strongest coaching message for {0}?".format(quiz_label),
+                    options=[
+                        action_three,
+                        "Stay passive and wait for instructions.",
+                        "Protect the old habit even when it is not working.",
+                        "Focus only on speed and ignore quality.",
+                    ],
+                    correct_option_index=0,
+                    explanation="The video closes by reinforcing this repeatable routine.",
+                ),
+                QuizQuestion(
+                    prompt="Why does this training matter for {0}?".format(quiz_label),
+                    options=[
+                        training_objective,
+                        "It removes the need to engage customers.",
+                        "It only matters during end-of-month reporting.",
+                        "It replaces teamwork on the floor.",
+                    ],
+                    correct_option_index=0,
+                    explanation="The objective anchors why this behavior or KPI matters in the role.",
+                ),
+                QuizQuestion(
+                    prompt="Which statement best describes the strong example from the video for {0}?".format(quiz_label),
+                    options=[
+                        good_behavior,
+                        bad_behavior,
+                        "Do less and wait for direction.",
+                        "End the sale conversation quickly.",
+                    ],
+                    correct_option_index=0,
+                    explanation="The good example is the standard learners should copy.",
+                ),
+                QuizQuestion(
+                    prompt="What should the learner avoid when working on {0}?".format(quiz_label),
+                    options=[
+                        bad_behavior,
+                        good_behavior,
+                        action_one,
+                        action_three,
+                    ],
+                    correct_option_index=0,
+                    explanation="The bad pattern is what weakens results and customer experience.",
+                ),
+                QuizQuestion(
+                    prompt="What outcome should strong execution create for {0}?".format(quiz_label),
+                    options=[
+                        video_script,
+                        "Less effort and less follow-through on the floor.",
+                        "More missed selling or service moments.",
+                        "A weaker customer experience.",
+                    ],
+                    correct_option_index=0,
+                    explanation="For {0}, strong execution comes from applying the coached behavior in real customer moments.".format(
+                        quiz_label
+                    ),
+                ),
+            ]
+            return KPIQuiz(
+                role_name=item.role_name,
+                kpi_name=item.kpi_name,
+                video_version_id=version.id,
+                questions=questions,
+            )
         prompts = [
             "What is the primary goal of improving {kpi} in the {role} role?",
             "Which daily behavior from the video most directly supports {kpi}?",
@@ -357,6 +586,16 @@ class KPIStudioService:
             video_version_id=version.id,
             questions=questions,
         )
+
+    def _guide_entry_for(self, name: str) -> Optional[Dict[str, Any]]:
+        return TRAINING_GUIDE_INDEX.get(_lookup_key(name))
+
+    def _catalog_entry_from_guide(self, guide_entry: Dict[str, Any]) -> Dict[str, str]:
+        return {
+            "name": str(guide_entry["name"]),
+            "category": str(guide_entry["category"]),
+            "objective": str(guide_entry["training_objective"]),
+        }
 
     def _find_version(self, item: KPIStudioItem, version_id: str) -> VideoVersion:
         for version in item.video_versions:

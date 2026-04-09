@@ -121,6 +121,41 @@ class KPIStudioTestCase(unittest.TestCase):
         longest_scene_words = max(len(scene.narration.split()) for scene in version.scene_plan)
         self.assertLessEqual(longest_scene_words, 28)
 
+    def test_known_skill_uses_saved_training_guide_for_script_and_scenes(self) -> None:
+        skill_item = next(
+            item for item in self.container.kpi_studio.list_items()
+            if item.kpi_name == "Adaptability & Problem Solving"
+        )
+
+        version = self.container.kpi_studio.generate_video_version(skill_item.id, {"role_name": self.role_name})
+        refreshed = self.container.kpi_studio.get_item(skill_item.id)
+
+        self.assertIn("Things do not always go as planned in a store", refreshed.script_draft)
+        self.assertIn("not available", refreshed.script_draft)
+        self.assertTrue(any("offer a solution" in scene.narration.lower() for scene in version.scene_plan))
+
+    def test_known_kpi_quiz_uses_saved_training_guide_content(self) -> None:
+        kpi_item = next(
+            item for item in self.container.kpi_studio.list_items()
+            if item.kpi_name == "UNIT PER TRANSACTION"
+        )
+
+        self.container.kpi_studio.generate_video_version(kpi_item.id, {"role_name": self.role_name})
+        refreshed = self.container.kpi_studio.get_item(kpi_item.id)
+
+        self.assertIsNotNone(refreshed.quiz)
+        prompt_text = " ".join(question.prompt for question in refreshed.quiz.questions)
+        explanation_text = " ".join(question.explanation for question in refreshed.quiz.questions)
+        self.assertIn("UPT", prompt_text)
+        self.assertIn("add-on", explanation_text.lower())
+        option_text = " ".join(
+            option
+            for question in refreshed.quiz.questions
+            for option in question.options
+        )
+        self.assertIn("Suggest jeans or accessories", option_text)
+        self.assertIn("Bill only the T-shirt", option_text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -11,7 +12,13 @@ if SRC_PATH not in sys.path:
     sys.path.insert(0, SRC_PATH)
 
 from lms_engine.domain.models import VideoScenePlan
-from lms_engine.integrations.local_video_assets import build_scene_svg, write_concat_file
+from lms_engine.integrations.local_video_assets import (
+    build_scene_svg,
+    export_final_audio_track,
+    render_voice_track,
+    render_elevenlabs_voiceover,
+    write_concat_file,
+)
 
 
 class LocalVideoAssetsTestCase(unittest.TestCase):
@@ -58,6 +65,78 @@ class LocalVideoAssetsTestCase(unittest.TestCase):
                 "file '{0}'".format(scene_paths[0].resolve()),
                 "file '{0}'".format(scene_paths[1].resolve()),
             ],
+        )
+
+    def test_render_elevenlabs_voiceover_writes_response_bytes(self) -> None:
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self) -> bytes:
+                return b"mock-mp3-audio"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "voiceover.mp3"
+            with patch(
+                "lms_engine.integrations.local_video_assets.request.urlopen",
+                return_value=FakeResponse(),
+            ) as mocked_urlopen:
+                render_elevenlabs_voiceover(
+                    text="Coach the team through a better floor conversion example.",
+                    output_path=output_path,
+                    api_key="test-key",
+                    voice_id="voice-123",
+                    model_id="eleven_multilingual_v2",
+                )
+
+            self.assertTrue(output_path.exists())
+            self.assertEqual(output_path.read_bytes(), b"mock-mp3-audio")
+            req = mocked_urlopen.call_args.args[0]
+            self.assertEqual(req.full_url, "https://api.elevenlabs.io/v1/text-to-speech/voice-123")
+            self.assertEqual(req.get_method(), "POST")
+            self.assertEqual(req.headers["Xi-api-key"], "test-key")
+            self.assertEqual(req.headers["Accept"], "audio/mpeg")
+            self.assertIn(b'"text": "Coach the team through a better floor conversion example."', req.data)
+            self.assertIn(b'"model_id": "eleven_multilingual_v2"', req.data)
+
+    def test_render_voice_track_requires_elevenlabs_credentials(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "voiceover.mp3"
+            with self.assertRaisesRegex(ValueError, "ElevenLabs voice is selected but ELEVENLABS_API_KEY is missing"):
+                render_voice_track(
+                    text="Coach the team through a better floor conversion example.",
+                    output_path=output_path,
+                    voice_provider="elevenlabs",
+                    elevenlabs_api_key="",
+                    elevenlabs_voice_id="ack0QsRaQyDLnVyMQTSd",
+                )
+
+    def test_export_final_audio_track_builds_debug_audio_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            final_video_path = output_dir / "final_video.mp4"
+            final_video_path.write_bytes(b"video")
+
+            with patch("lms_engine.integrations.local_video_assets.run_command") as mocked_run_command:
+                audio_path = export_final_audio_track(final_video_path, output_dir)
+
+        self.assertEqual(audio_path, output_dir / "final_voiceover.m4a")
+        mocked_run_command.assert_called_once_with(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(final_video_path),
+                "-vn",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                str(output_dir / "final_voiceover.m4a"),
+            ]
         )
 
 
