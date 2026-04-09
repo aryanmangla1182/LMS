@@ -70,12 +70,8 @@ const kpiStudioList = document.getElementById("kpi-studio-list");
 const kpiStudioDetail = document.getElementById("kpi-studio-detail");
 const adminSummary = document.getElementById("admin-summary");
 const learnerCourseTitle = document.getElementById("learner-course-title");
-const learnerReviewBackBtn = document.getElementById("learner-review-back-btn");
-const learnerMetrics = document.getElementById("learner-metrics");
 const courseView = document.getElementById("course-view");
-const learnerReviewSummary = document.getElementById("learner-review-summary");
-const assessmentResult = document.getElementById("assessment-result");
-const kpiView = document.getElementById("kpi-view");
+const voiceView = document.getElementById("voice-view");
 const lessonPlayerModal = document.getElementById("lesson-player-modal");
 const lessonPlayerTitle = document.getElementById("lesson-player-title");
 const lessonPlayerBadge = document.getElementById("lesson-player-badge");
@@ -400,11 +396,11 @@ function setVisibilityForUser() {
     workspaceSummary.innerHTML = `
       <div class="workspace-pill">
         <span class="meta">Access</span>
-        <strong>Assigned lessons, assignments, assessment</strong>
+        <strong>Course modules, assessment, KPI actions</strong>
       </div>
       <div class="workspace-pill">
-        <span class="meta">Focus</span>
-        <strong>KPI actions and improvement plan</strong>
+        <span class="meta">Practice</span>
+        <strong>Voice coaching and pitch review</strong>
       </div>
     `;
   }
@@ -413,7 +409,7 @@ function setVisibilityForUser() {
 function renderRoleOptions() {
   const publishedRoles = state.roles.filter((role) => role.status === "published");
   roleSelect.innerHTML = publishedRoles.length
-    ? publishedRoles.map((role) => `<option value="${role.id}">${escapeHtml(role.title)} · ${escapeHtml(role.level)}</option>`).join("")
+    ? publishedRoles.map((role) => `<option value="${role.id}">${escapeHtml(role.title)}</option>`).join("")
     : `<option value="">Publish a role first</option>`;
 }
 
@@ -422,18 +418,19 @@ function updateTrainerStudioState(selectedRole) {
   const usersTab = [...subtabs].find((tab) => tab.dataset.group === "admin" && tab.dataset.subtab === "trainer-users");
   const hasRole = Boolean(selectedRole);
   const isPublished = selectedRole?.status === "published";
+  const hasPublishedRoles = state.roles.some((role) => role.status === "published");
 
   if (reviewTab) {
     reviewTab.disabled = !hasRole;
   }
   if (usersTab) {
-    usersTab.disabled = !isPublished;
+    usersTab.disabled = !hasPublishedRoles;
   }
 
   if (!hasRole && state.activeSubtabs.admin !== "trainer-role-input" && state.activeSubtabs.admin !== "trainer-roles") {
-    setSubtab("admin", "trainer-role-input");
+    setSubtab("admin", hasPublishedRoles ? "trainer-users" : "trainer-role-input");
   }
-  if (hasRole && !isPublished && ["trainer-role-course", "trainer-users"].includes(state.activeSubtabs.admin)) {
+  if (hasRole && !isPublished && state.activeSubtabs.admin === "trainer-role-course") {
     setSubtab("admin", "trainer-review");
   }
 }
@@ -661,7 +658,6 @@ function renderTrainerCoursePreview(role) {
         <strong>${escapeHtml(role.course_template.title)}</strong>
         <span class="chip soft">Published</span>
         <span class="chip">${escapeHtml(role.segment)}</span>
-        <span class="chip">${escapeHtml(role.level)}</span>
       </div>
       <div class="meta">${escapeHtml(role.course_template.description)}</div>
       <div class="actions">
@@ -757,7 +753,7 @@ function renderTrainerRoleLibrary() {
         <span class="chip ${statusTone(role.status)}">${escapeHtml(titleCaseLabel(role.status))}</span>
         <span class="chip">${escapeHtml(role.segment)}</span>
       </div>
-      <div class="meta">${escapeHtml(role.level)} · ${escapeHtml(role.summary || role.work_summary || "")}</div>
+      <div class="meta">${escapeHtml(role.summary || role.work_summary || "")}</div>
       <div class="actions">
         <button class="secondary role-open-review" data-role-id="${role.id}">Open Review</button>
         <button class="secondary role-open-course" data-role-id="${role.id}" ${role.status !== "published" ? "disabled" : ""}>Open Course Page</button>
@@ -1097,78 +1093,143 @@ function renderPitchAnalyzer(dashboard) {
   const sessions = dashboard.pitch_sessions || [];
   const latest = sessions[0] || null;
   return `
-    <div class="card pitch-analyzer-card">
-      <div class="panel-head">
-        <div>
-          <p class="eyebrow">AI Pitch Analyzer</p>
-          <h3 class="section-title">Analyze a live sales pitch</h3>
+    <div class="voice-practice-shell">
+      <div class="card voice-hero-card">
+        <div class="voice-hero-copy">
+          <p class="eyebrow">AI Voice Coach</p>
+          <h3 class="section-title">Practice your sales pitch with structured feedback</h3>
+          <div class="meta">Upload a short pitch recording and get transcript-based scoring, coaching notes, and category-level feedback for the exact role you are training on.</div>
+        </div>
+        <div class="voice-hero-stats">
+          <div class="mini-stat">
+            <span class="meta">Attempts</span>
+            <strong>${escapeHtml(sessions.length)}</strong>
+          </div>
+          <div class="mini-stat">
+            <span class="meta">Latest Score</span>
+            <strong>${escapeHtml(latest?.analysis?.overall_score ?? "--")}</strong>
+          </div>
+          <div class="mini-stat">
+            <span class="meta">Next Focus</span>
+            <strong>${escapeHtml(latest?.analysis?.recommended_next_step || "Record your first attempt")}</strong>
+          </div>
         </div>
       </div>
-      <div class="meta">Upload a short pitch recording. The system will transcribe it, score it, and show what to improve next.</div>
-      <form id="pitch-analyzer-form" class="form compact-form">
-        <label>
-          Pitch Title
-          <input name="title" placeholder="Store Manager floor pitch" value="${escapeHtml(dashboard.role.title)} sales pitch">
-        </label>
-        <label>
-          Audio File
-          <input name="audio_file" type="file" accept="audio/*,.txt" required>
-        </label>
-        <button type="submit" class="primary">Analyze Pitch</button>
-      </form>
+
+      <div class="grid two voice-layout">
+        <div class="card pitch-analyzer-card">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">New Attempt</p>
+              <h3 class="section-title">Analyze a live sales pitch</h3>
+            </div>
+          </div>
+          <div class="meta">Use a short real pitch, not a rehearsed script. Clear opening, customer need discovery, recommendation, and close produce the best coaching output.</div>
+          <form id="pitch-analyzer-form" class="form compact-form">
+            <label>
+              Pitch Title
+              <input name="title" placeholder="Store Manager floor pitch" value="${escapeHtml(dashboard.role.title)} sales pitch">
+            </label>
+            <label>
+              Audio File
+              <input name="audio_file" type="file" accept="audio/*,.txt" required>
+            </label>
+            <button type="submit" class="primary">Analyze Pitch</button>
+          </form>
+        </div>
+
+        <div class="card voice-guidance-card">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">What Good Looks Like</p>
+              <h3 class="section-title">Pitch checklist</h3>
+            </div>
+          </div>
+          <div class="stack">
+            <div class="spotlight">
+              <strong>Open with intent</strong>
+              <div class="meta">State why you are speaking to the customer and set the conversation clearly.</div>
+            </div>
+            <div class="spotlight">
+              <strong>Discover the need</strong>
+              <div class="meta">Ask enough to understand the customer goal before recommending anything.</div>
+            </div>
+            <div class="spotlight">
+              <strong>Recommend and close</strong>
+              <div class="meta">Tie the plan to the need, handle hesitation, and end with a next step.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       ${latest ? `
-        <div class="pitch-latest-result">
-          <div class="inline">
+        <div class="card pitch-latest-result">
+          <div class="inline voice-result-head">
             <strong>Latest Result</strong>
             <span class="chip ${latest.analysis.overall_score >= 75 ? "soft" : "warn"}">${escapeHtml(latest.analysis.overall_score)} / 100</span>
           </div>
           <div class="meta">${escapeHtml(latest.analysis.summary)}</div>
+          <div class="meta"><strong>Next step:</strong> ${escapeHtml(latest.analysis.recommended_next_step || "Retry with a sharper structure.")}</div>
         </div>
       ` : ""}
-    </div>
-    <div class="stack pitch-session-list">
-      ${(sessions.length ? sessions : []).map((session) => `
-        <details class="card pitch-session-card">
-          <summary class="pitch-session-summary">
-            <div class="inline">
-              <strong>${escapeHtml(session.title)}</strong>
-              <span class="chip ${session.analysis.overall_score >= 75 ? "soft" : "warn"}">${escapeHtml(session.analysis.overall_score)} / 100</span>
-              <span class="chip">${new Date(session.created_at).toLocaleDateString()}</span>
-            </div>
-          </summary>
-          <div class="stack learning-path-content">
-            <div class="meta">${escapeHtml(session.analysis.summary)}</div>
-            <div class="grid two compact-grid">
-              <div class="spotlight">
-                <strong>Strengths</strong>
-                <div class="meta">${(session.analysis.strengths || []).length ? escapeHtml(session.analysis.strengths.join(" ")) : "No strengths recorded yet."}</div>
-              </div>
-              <div class="spotlight">
-                <strong>Improve Next</strong>
-                <div class="meta">${(session.analysis.improvements || []).length ? escapeHtml(session.analysis.improvements.join(" ")) : "No immediate coaching point recorded."}</div>
-              </div>
-            </div>
-            <div class="card-surface">
-              <strong>Transcript</strong>
-              <div class="meta transcript-block">${escapeHtml(session.transcript || "No transcript available.")}</div>
-            </div>
-            <div class="grid two compact-grid">
-              ${(session.analysis.rubric || []).map((item) => `
-                <div class="spotlight">
-                  <div class="inline">
-                    <strong>${escapeHtml(item.category)}</strong>
-                    <span class="chip ${item.score >= 75 ? "soft" : "warn"}">${escapeHtml(item.score)}</span>
-                  </div>
-                  <div class="meta">${escapeHtml(item.reason)}</div>
-                </div>
-              `).join("")}
-            </div>
-            ${session.audio_asset?.url ? `<audio controls src="${escapeHtml(session.audio_asset.url)}" class="pitch-audio-player"></audio>` : ""}
+
+      <div class="card pitch-history-card">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Past Attempts</p>
+            <h3 class="section-title">Voice practice history</h3>
           </div>
-        </details>
-      `).join("") || `<div class="empty">No pitch analysis sessions yet.</div>`}
+        </div>
+        <div class="stack pitch-session-list">
+          ${(sessions.length ? sessions : []).map((session) => `
+            <details class="card pitch-session-card" ${session.id === latest?.id ? "open" : ""}>
+              <summary class="pitch-session-summary">
+                <div class="inline">
+                  <strong>${escapeHtml(session.title)}</strong>
+                  <span class="chip ${session.analysis.overall_score >= 75 ? "soft" : "warn"}">${escapeHtml(session.analysis.overall_score)} / 100</span>
+                  <span class="chip">${new Date(session.created_at).toLocaleDateString()}</span>
+                </div>
+              </summary>
+              <div class="stack learning-path-content">
+                <div class="meta">${escapeHtml(session.analysis.summary)}</div>
+                <div class="grid two compact-grid">
+                  <div class="spotlight">
+                    <strong>Strengths</strong>
+                    <div class="meta">${(session.analysis.strengths || []).length ? escapeHtml(session.analysis.strengths.join(" ")) : "No strengths recorded yet."}</div>
+                  </div>
+                  <div class="spotlight">
+                    <strong>Improve Next</strong>
+                    <div class="meta">${(session.analysis.improvements || []).length ? escapeHtml(session.analysis.improvements.join(" ")) : "No immediate coaching point recorded."}</div>
+                  </div>
+                </div>
+                <div class="card-surface">
+                  <strong>Transcript</strong>
+                  <div class="meta transcript-block">${escapeHtml(session.transcript || "No transcript available.")}</div>
+                </div>
+                <div class="grid two compact-grid">
+                  ${(session.analysis.rubric || []).map((item) => `
+                    <div class="spotlight">
+                      <div class="inline">
+                        <strong>${escapeHtml(item.category)}</strong>
+                        <span class="chip ${item.score >= 75 ? "soft" : "warn"}">${escapeHtml(item.score)}</span>
+                      </div>
+                      <div class="meta">${escapeHtml(item.reason)}</div>
+                    </div>
+                  `).join("")}
+                </div>
+                ${session.audio_asset?.url ? `<audio controls src="${escapeHtml(session.audio_asset.url)}" class="pitch-audio-player"></audio>` : ""}
+              </div>
+            </details>
+          `).join("") || `<div class="empty">No pitch analysis sessions yet.</div>`}
+        </div>
+      </div>
     </div>
   `;
+}
+
+function renderLearnerVoicePage(dashboard) {
+  voiceView.innerHTML = renderPitchAnalyzer(dashboard);
+  attachLearnerVoiceHandlers();
 }
 
 function renderLearnerDashboard(dashboard) {
@@ -1180,12 +1241,11 @@ function renderLearnerDashboard(dashboard) {
     questions.map((question) => [question.id, Object.prototype.hasOwnProperty.call(previousAnswers, question.id) ? previousAnswers[question.id] : null])
   );
   state.currentQuestionIndex = Math.min(state.currentQuestionIndex, Math.max(questions.length - 1, 0));
+  renderLearnerVoicePage(dashboard);
   renderLearnerCoursePage(dashboard);
 }
 
 function renderLearnerCoursePage(dashboard) {
-  const latestAttempt = dashboard.latest_assessment;
-  const openImprovementPlan = (dashboard.remediation_assignments || []).find((item) => item.status === "assigned");
   const sections = dashboard.enrollment.course.sections || [];
   learnerCourseTitle.textContent = `${dashboard.role.title} Course`;
 
@@ -1381,104 +1441,9 @@ function renderLearnerCoursePage(dashboard) {
         <button class="secondary learner-open-kpi-btn">Record KPI</button>
       </div>
     </div>
-    ${renderPitchAnalyzer(dashboard)}
   `;
 
   attachLearnerCourseHandlers(dashboard);
-}
-
-function renderLearnerReview(dashboard) {
-  learnerReviewSummary.innerHTML = `
-    <div class="card">
-      <span class="meta">Completion</span>
-      <strong class="summary-value">${dashboard.metrics.completion_percentage}%</strong>
-      <div class="meta">${dashboard.metrics.lessons_completed}/${dashboard.metrics.total_lessons} lessons completed</div>
-    </div>
-    <div class="card">
-      <span class="meta">Assessment</span>
-      <strong class="summary-value">${dashboard.metrics.latest_assessment_score ?? "--"}</strong>
-      <div class="meta">${dashboard.metrics.weak_skill_count} weak skills · ${dashboard.metrics.weak_kpis} weak KPIs</div>
-    </div>
-  `;
-  renderAssessmentResult(dashboard.latest_assessment);
-  renderKpiView(dashboard);
-}
-
-function renderAssessmentResult(attempt) {
-  if (!attempt) {
-    assessmentResult.innerHTML = `<div class="empty">No assessment submitted yet.</div>`;
-    return;
-  }
-  assessmentResult.innerHTML = `
-    <div class="card">
-      <div class="inline">
-        <strong>Score ${attempt.score_percentage}%</strong>
-        <span class="chip ${attempt.passed ? "soft" : "warn"}">${attempt.passed ? "Passed" : "Needs Work"}</span>
-      </div>
-      <div class="meta">${escapeHtml(attempt.analysis_summary)}</div>
-    </div>
-    <div class="split-two">
-      <div class="card">
-        <h3 class="section-title">Weak Skills</h3>
-        ${attempt.weak_skills.length ? attempt.weak_skills.map((item) => `<div class="meta">${escapeHtml(item.skill_name)} · ${item.accuracy}%</div>`).join("") : `<div class="meta">No weak skills in this attempt.</div>`}
-      </div>
-      <div class="card">
-        <h3 class="section-title">KPI Risk Areas</h3>
-        ${attempt.weak_kpis.length ? attempt.weak_kpis.map((item) => `<div class="meta">${escapeHtml(item.kpi_name)} · ${item.accuracy}%</div>`).join("") : `<div class="meta">No KPI risk areas in this attempt.</div>`}
-      </div>
-    </div>
-    ${attempt.question_results?.length ? `
-      <div class="card">
-        <h3 class="section-title">Question Review</h3>
-        <div class="stack">
-          ${attempt.question_results.map((item, index) => `
-            <div class="spotlight">
-              <div class="inline">
-                <strong>Q${index + 1}</strong>
-                <span class="chip ${item.is_correct ? "soft" : "warn"}">${item.is_correct ? "Correct" : "Incorrect"}</span>
-              </div>
-              <div class="meta">${escapeHtml(item.prompt)}</div>
-              <div class="meta">${escapeHtml(item.explanation)}</div>
-            </div>
-          `).join("")}
-        </div>
-      </div>
-    ` : ""}
-  `;
-}
-
-function renderKpiView(dashboard) {
-  const observations = dashboard.kpi_observations || [];
-  const assignments = dashboard.remediation_assignments || [];
-  kpiView.innerHTML = `
-    <div class="grid two">
-      <div class="card">
-        <h3 class="section-title">KPI Observations</h3>
-        ${observations.length ? observations.map((item) => `
-          <div class="spotlight">
-            <div class="inline">
-              <strong>${escapeHtml(item.kpi_name)}</strong>
-              <span class="chip ${statusTone(item.status)}">${escapeHtml(titleCaseLabel(item.status))}</span>
-            </div>
-            <div class="meta">${item.value} / ${item.target_value} · ${escapeHtml(item.period_label)}</div>
-            ${item.notes ? `<div class="meta">${escapeHtml(item.notes)}</div>` : ""}
-          </div>
-        `).join("") : `<div class="meta">No KPI observations yet.</div>`}
-      </div>
-      <div class="card">
-        <h3 class="section-title">Improvement Plan</h3>
-        ${assignments.length ? assignments.map((item) => `
-          <div class="spotlight">
-            <div class="inline">
-              <strong>${escapeHtml(item.title)}</strong>
-              <span class="chip ${statusTone(item.status)}">${escapeHtml(titleCaseLabel(item.status))}</span>
-            </div>
-            <div class="meta">${escapeHtml(item.summary)}</div>
-          </div>
-        `).join("") : `<div class="meta">No remediation assignments yet.</div>`}
-      </div>
-    </div>
-  `;
 }
 
 function attachLearnerCourseHandlers(dashboard) {
@@ -1537,7 +1502,7 @@ function attachLearnerCourseHandlers(dashboard) {
       try {
         await fetchJson("/api/my/assessment/submit", { method: "POST", body: JSON.stringify({ answers }) });
         state.learnerCourseView = { mode: "overview", lessonId: null };
-        setSubtab("learner", "learner-review");
+        setSubtab("learner", "learner-course");
         await refreshLearnerData();
       } catch (error) {
         alert(error.message);
@@ -1560,7 +1525,7 @@ function attachLearnerCourseHandlers(dashboard) {
       try {
         await fetchJson("/api/my/kpis", { method: "POST", body: JSON.stringify(payload) });
         state.learnerCourseView = { mode: "overview", lessonId: null };
-        setSubtab("learner", "learner-review");
+        setSubtab("learner", "learner-course");
         await refreshLearnerData();
       } catch (error) {
         alert(error.message);
@@ -1583,42 +1548,46 @@ function attachLearnerCourseHandlers(dashboard) {
       try {
         await fetchJson(`/api/my/assignments/${lessonId}/submit`, { method: "POST", body: JSON.stringify({ responses }) });
         state.learnerCourseView = { mode: "overview", lessonId: null };
-        setSubtab("learner", "learner-review");
+        setSubtab("learner", "learner-course");
         await refreshLearnerData();
       } catch (error) {
         alert(error.message);
       }
     });
   }
+}
 
+function attachLearnerVoiceHandlers() {
   const pitchForm = document.getElementById("pitch-analyzer-form");
-  if (pitchForm) {
-    pitchForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const formData = new FormData(pitchForm);
-      const file = formData.get("audio_file");
-      if (!(file instanceof File) || !file.size) {
-        alert("Choose an audio file first.");
-        return;
-      }
-      try {
-        const base64Data = await readFileAsBase64(file);
-        await fetchJson("/api/my/pitches/analyze", {
-          method: "POST",
-          body: JSON.stringify({
-            title: String(formData.get("title") || "").trim(),
-            base64_data: base64Data,
-            extension: (file.name.split(".").pop() || "webm").toLowerCase(),
-            mime_type: file.type || "audio/webm",
-          }),
-        });
-        pitchForm.reset();
-        await refreshLearnerData();
-      } catch (error) {
-        alert(error.message);
-      }
-    });
+  if (!pitchForm) {
+    return;
   }
+  pitchForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const formData = new FormData(pitchForm);
+    const file = formData.get("audio_file");
+    if (!(file instanceof File) || !file.size) {
+      alert("Choose an audio file first.");
+      return;
+    }
+    try {
+      const base64Data = await readFileAsBase64(file);
+      await fetchJson("/api/my/pitches/analyze", {
+        method: "POST",
+        body: JSON.stringify({
+          title: String(formData.get("title") || "").trim(),
+          base64_data: base64Data,
+          extension: (file.name.split(".").pop() || "webm").toLowerCase(),
+          mime_type: file.type || "audio/webm",
+        }),
+      });
+      setSubtab("learner", "learner-voice");
+      pitchForm.reset();
+      await refreshLearnerData();
+    } catch (error) {
+      alert(error.message);
+    }
+  });
 }
 
 function renderInlineVideoPlayer(lessonId) {
@@ -2148,7 +2117,7 @@ requestCodeForm.addEventListener("submit", async (event) => {
     const res = await fetchJson("/api/auth/request-code", { method: "POST", body: JSON.stringify(payload) });
     pendingPhoneNumber = payload.phone_number;
     verifyCodeForm.classList.remove("hidden");
-    requestCodeResult.innerHTML = `<div class="card card-emphasis"><strong>Code generated</strong><div class="meta">For MVP testing, use code <strong>${escapeHtml(res.item.code)}</strong> for ${escapeHtml(payload.phone_number)}.</div></div>`;
+    requestCodeResult.innerHTML = `<div class="card card-emphasis"><strong>Code generated</strong><div class="meta">Use code <strong>${escapeHtml(res.item.code)}</strong> for ${escapeHtml(payload.phone_number)}.</div></div>`;
     verifyCodeResult.innerHTML = "";
   } catch (error) {
     verifyCodeForm.classList.add("hidden");
@@ -2169,6 +2138,7 @@ verifyCodeForm.addEventListener("submit", async (event) => {
       setSubtab("admin", "trainer-role-input");
     } else {
       setSubtab("learner", "learner-course");
+      state.learnerCourseView = { mode: "overview", lessonId: null };
     }
     verifyCodeResult.innerHTML = "";
     await bootWorkspace();
@@ -2192,32 +2162,18 @@ roleForm.addEventListener("submit", async (event) => {
   const payload = {
     segment: formData.get("segment"),
     title: formData.get("title"),
-    level: formData.get("level"),
-    legacy_mappings: parseLines(formData.get("legacy_mappings")),
+    level: "",
+    legacy_mappings: [],
     work_summary: formData.get("work_summary"),
     responsibilities: parseLines(formData.get("responsibilities")),
     skills: parseLines(formData.get("skills")),
     kpis: parseKpis(formData.get("kpis")),
   };
   try {
-    const [roleRes, studioRes] = await Promise.all([
-      fetchJson("/api/roles/generate", { method: "POST", body: JSON.stringify(payload) }),
-      fetchJson("/studio/session", {
-        method: "POST",
-        body: JSON.stringify({ ...payload, role_name: payload.title }),
-      }),
-    ]);
+    const roleRes = await fetchJson("/api/roles/generate", { method: "POST", body: JSON.stringify(payload) });
     state.selectedRoleId = roleRes.item.id;
-    state.kpiStudio.items = studioRes.items;
-    state.kpiStudio.roleName = String(payload.title || "");
-    state.kpiStudio.activeItemId = null;
-    state.kpiStudio.activeVersionId = null;
-    state.kpiStudio.openItemIds = [];
-    state.kpiStudio.lastError = "";
     setSubtab("admin", "trainer-review");
     await refreshTrainerData();
-    renderKpiStudio();
-    await generateStudioCourse();
   } catch (error) {
     alert(error.message);
   }
