@@ -5,15 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from lms_engine.application.kpi_studio import KPIStudioService
 from lms_engine.ai import AIContentGenerator
 from lms_engine.application.mvp import LMSEngineService
 from lms_engine.elevenlabs import ElevenLabsSpeechClient
+from lms_engine.integrations.video import build_video_gateway
 from lms_engine.storage import AssetStore, JsonStore
 
 
 @dataclass
 class AppContainer:
     engine: LMSEngineService
+    kpi_studio: KPIStudioService
 
 
 def build_container() -> AppContainer:
@@ -27,4 +30,5 @@ def build_container() -> AppContainer:
         generator=AIContentGenerator(),
         speech_client=ElevenLabsSpeechClient(),
     )
-    return AppContainer(engine=engine)
+    kpi_studio = KPIStudioService(video_gateway=build_video_gateway())
+    return AppContainer(engine=engine, kpi_studio=kpi_studio)

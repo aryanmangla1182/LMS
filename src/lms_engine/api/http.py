@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import mimetypes
+from datetime import datetime
 from dataclasses import asdict, is_dataclass
+from enum import Enum
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -28,6 +30,10 @@ class RouteNotFoundError(NotFoundError):
 
 
 def serialize(value: Any) -> Any:
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, datetime):
+        return value.isoformat()
     if is_dataclass(value):
         return serialize(asdict(value))
     if isinstance(value, list):
@@ -59,6 +65,9 @@ def create_handler(container: AppContainer) -> Callable[..., BaseHTTPRequestHand
                     return
                 if method == "GET" and path.startswith("/media/"):
                     self._send_media(path)
+                    return
+                if method == "GET" and path.startswith("/studio/videos/"):
+                    self._send_studio_video(path)
                     return
                 payload = self._read_json_body() if method == "POST" else None
                 token = self._extract_token()
@@ -119,6 +128,15 @@ def create_handler(container: AppContainer) -> Callable[..., BaseHTTPRequestHand
             self.end_headers()
             self.wfile.write(response_bytes)
 
+        def _send_studio_video(self, path: str) -> None:
+            asset_id = path[len("/studio/videos/") :]
+            mime_type, response_bytes = container.kpi_studio.fetch_video_bytes(asset_id)
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", mime_type)
+            self.send_header("Content-Length", str(len(response_bytes)))
+            self.end_headers()
+            self.wfile.write(response_bytes)
+
         def _extract_token(self) -> str:
             header = self.headers.get("Authorization", "")
             if header.startswith("Bearer "):
@@ -132,10 +150,18 @@ def route_request(
     container: AppContainer,
     method: str,
     path: str,
-    payload: Optional[Dict[str, Any]],
-    token: str,
+    payload_or_context: Optional[Dict[str, Any]],
+    payload_or_token: Any,
 ) -> Dict[str, Any]:
     engine = container.engine
+    payload: Optional[Dict[str, Any]]
+    token = ""
+
+    if isinstance(payload_or_token, str):
+        payload = payload_or_context
+        token = payload_or_token
+    else:
+        payload = payload_or_token if isinstance(payload_or_token, dict) else payload_or_context
 
     if method == "GET" and path == "/api/health":
         return {"status": "ok"}
@@ -220,6 +246,28 @@ def route_request(
     if path.startswith("/api/my/lessons/") and path.endswith("/media") and method == "POST":
         lesson_id = path[len("/api/my/lessons/") : -len("/media")].rstrip("/")
         return {"item": engine.upload_lesson_media(token, lesson_id, payload or {})}
+
+    if method == "POST" and path == "/studio/session":
+        return {"items": serialize(container.kpi_studio.create_session(payload or {}))}
+
+    if method == "GET" and path == "/studio/kpis":
+        return {"items": serialize(container.kpi_studio.list_items())}
+
+    if path.startswith("/studio/kpis/"):
+        suffix = path[len("/studio/kpis/") :]
+        if "/" not in suffix and method == "GET":
+            return {"item": serialize(container.kpi_studio.get_item(suffix))}
+        if suffix.endswith("/reopen") and method == "POST":
+            item_id = suffix[: -len("/reopen")].rstrip("/")
+            return {"item": serialize(container.kpi_studio.reopen_item(item_id))}
+        if suffix.endswith("/versions") and method == "POST":
+            item_id = suffix[: -len("/versions")].rstrip("/")
+            version = container.kpi_studio.generate_video_version(item_id, payload or {})
+            return {"item": serialize(version)}
+        if "/versions/" in suffix and suffix.endswith("/approve") and method == "POST":
+            item_id, version_suffix = suffix.split("/versions/", 1)
+            version_id = version_suffix[: -len("/approve")].rstrip("/")
+            return {"item": serialize(container.kpi_studio.approve_version(item_id.rstrip("/"), version_id))}
 
     raise RouteNotFoundError("Route not found: {0} {1}".format(method, path))
 
