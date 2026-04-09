@@ -14,8 +14,10 @@ from lms_engine.api.http import create_server
 
 def main() -> None:
     container = build_container()
-    server = create_server(container)
-    print("LMS engine listening on http://127.0.0.1:8000")
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", "8000"))
+    server = create_server(container, host=host, port=port)
+    print("LMS engine listening on http://{0}:{1}".format(host, port))
     server.serve_forever()
 
 

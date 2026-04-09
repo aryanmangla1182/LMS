@@ -3,95 +3,300 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LMS Engine Control Room</title>
+  <title>Cultfit LMS Engine</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <div class="bg-orb orb-a"></div>
-  <div class="bg-orb orb-b"></div>
-  <main class="shell">
-    <section class="hero card">
-      <div class="hero-copy">
-        <p class="eyebrow">Cultfit Role-Readiness Engine</p>
-        <h1>Learning that reacts to weak KPIs and keeps improving itself.</h1>
-        <p class="lede">
-          The first loop remediates employee gaps. The second loop helps the LMS manager
-          identify what keeps failing across the org and upgrade the content system.
+  <div class="halo halo-a"></div>
+  <div class="halo halo-b"></div>
+  <div class="grid-fade"></div>
+
+  <main class="page-shell">
+    <section class="hero panel">
+      <div class="hero-copy-block">
+        <div class="brand-row">
+          <div class="brand-mark">CF</div>
+          <div>
+            <p class="eyebrow">Cultfit Learning Engine</p>
+            <p class="brand-subtitle">Role readiness, KPI remediation, and guided growth for frontline teams.</p>
+          </div>
+        </div>
+        <h1>Professional learning ops for store, gym, and regional leadership teams.</h1>
+        <p class="hero-copy">
+          Owners define a role, review an AI-generated path, publish role-based training, and monitor which skills and
+          KPIs stay weak. Learners see only their assigned course, assessments, remediation, and readiness signals.
         </p>
+        <div class="hero-points">
+          <span class="chip soft">Role blueprinting</span>
+          <span class="chip soft">Phone auth</span>
+          <span class="chip soft">KPI-triggered remediation</span>
+          <span class="chip soft">Owner analytics</span>
+        </div>
       </div>
-      <div class="hero-actions">
-        <button id="seed-demo" class="primary">Load Demo Data</button>
-        <button id="refresh-dashboard" class="secondary">Refresh Dashboard</button>
-      </div>
+
+      <aside class="hero-side">
+        <div class="status-stack">
+          <div class="signal-card">
+            <p class="eyebrow">System Mode</p>
+            <div id="config-badge" class="badge soft">Checking configuration...</div>
+          </div>
+          <div class="signal-card">
+            <p class="eyebrow">Workspace</p>
+            <p class="signal-copy">Use the owner workspace to generate and publish role academies, then log in as a learner to test the experience.</p>
+          </div>
+          <button id="seed-btn" class="secondary hidden">Reset And Seed Demo</button>
+        </div>
+      </aside>
     </section>
 
-    <section class="stats" id="summary-cards"></section>
-
-    <section class="grid">
-      <article class="card panel learner-panel">
-        <div class="panel-head">
-          <div>
-            <p class="eyebrow">Loop 1</p>
-            <h2>Learner Remediation</h2>
+    <section id="auth-panel" class="auth-shell">
+      <article class="panel auth-intro">
+        <p class="eyebrow">Access Model</p>
+        <h2>One product, two experiences</h2>
+        <div class="auth-columns">
+          <div class="mini-card">
+            <strong>Owner</strong>
+            <p>Create roles, review learning paths, publish role academies, create users, and track KPI hotspots.</p>
           </div>
-          <select id="employee-select"></select>
-        </div>
-        <p class="panel-copy">
-          When KPI performance drops, the engine links the weak KPI back to competencies and suggests the most relevant content and validation.
-        </p>
-        <div id="employee-readiness" class="mini-banner"></div>
-        <div id="employee-analysis" class="stack"></div>
-      </article>
-
-      <article class="card panel manager-panel">
-        <div class="panel-head">
-          <div>
-            <p class="eyebrow">Loop 2</p>
-            <h2>LMS Manager Improvement View</h2>
+          <div class="mini-card">
+            <strong>Learner</strong>
+            <p>Open assigned lessons, take assessments, log KPI observations, and receive focused remediation.</p>
           </div>
         </div>
-        <p class="panel-copy">
-          This view highlights KPIs that stay weak across the org, so L&amp;D can improve the linked learning assets and assessments.
-        </p>
-        <div id="manager-insights" class="stack"></div>
       </article>
+
+      <section class="grid two auth-grid">
+        <article class="panel auth-card">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Step 1</p>
+              <h2>Request Login Code</h2>
+            </div>
+          </div>
+          <form id="request-code-form" class="form">
+            <label>
+              Mobile Number
+              <input name="phone_number" placeholder="9999999999" required>
+            </label>
+            <button type="submit" class="primary">Send Test Code</button>
+          </form>
+          <div id="request-code-result" class="stack"></div>
+        </article>
+
+        <article class="panel auth-card">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Step 2</p>
+              <h2>Verify And Open Workspace</h2>
+            </div>
+          </div>
+          <form id="verify-code-form" class="form">
+            <label>
+              Mobile Number
+              <input name="phone_number" placeholder="9999999999" required>
+            </label>
+            <label>
+              Code
+              <input name="code" placeholder="111111" required>
+            </label>
+            <button type="submit" class="primary">Enter Workspace</button>
+          </form>
+          <div id="verify-code-result" class="stack"></div>
+        </article>
+      </section>
     </section>
 
-    <section class="grid">
-      <article class="card panel compact">
-        <div class="panel-head">
-          <div>
-            <p class="eyebrow">System Shape</p>
-            <h2>Core Model</h2>
-          </div>
+    <section id="workspace" class="workspace hidden">
+      <section class="panel topbar">
+        <div>
+          <p class="eyebrow">Active Session</p>
+          <h2 id="user-banner-title">Workspace</h2>
+          <div id="user-banner-copy" class="meta"></div>
         </div>
-        <ul class="plain-list">
-          <li><strong>Role</strong> defines the job context.</li>
-          <li><strong>Competency</strong> defines what the person must be able to do.</li>
-          <li><strong>Evidence</strong> proves the competency exists.</li>
-          <li><strong>KPI analysis</strong> detects where performance is still weak.</li>
-          <li><strong>Improvement insights</strong> show where the platform itself needs refinement.</li>
-        </ul>
-      </article>
+        <div class="actions">
+          <div class="user-dot"></div>
+          <button id="logout-btn" class="secondary">Logout</button>
+        </div>
+      </section>
 
-      <article class="card panel compact">
-        <div class="panel-head">
-          <div>
-            <p class="eyebrow">Current API</p>
-            <h2>Live Backend Modules</h2>
+      <nav class="tabs" id="tabs">
+        <button class="tab active owner-only" data-tab="admin">Owner Studio</button>
+        <button class="tab owner-only" data-tab="owner">Owner Metrics</button>
+        <button class="tab learner-only" data-tab="learner">My Learning</button>
+      </nav>
+
+      <section id="admin" class="tab-panel active owner-only">
+        <div class="grid stage-grid">
+          <article class="panel stage-card">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Stage 1</p>
+                <h2>Define Role Blueprint</h2>
+              </div>
+            </div>
+            <form id="role-form" class="form">
+              <label>Segment<input name="segment" value="Retail" required></label>
+              <label>Role Title<input name="title" value="Store Manager" required></label>
+              <label>Level<input name="level" value="L3" required></label>
+              <label>Legacy Mapping<input name="legacy_mappings" value="Store Lead, Senior Associate"></label>
+              <label>Work Summary<textarea name="work_summary" rows="3">Owns day-to-day store performance, staff coaching, compliance, and local business outcomes.</textarea></label>
+              <label>Responsibilities<textarea name="responsibilities" rows="6">Open and close the store without compliance gaps
+Coach staff on service and conversion
+Track daily business performance and resolve weak areas
+Prepare strong team members for the next level</textarea></label>
+              <label>Skills<textarea name="skills" rows="6">Adaptability & Problem Solving
+Communication & Empathy
+Customer Focus & Service Excellence
+Initiative & Drive for Results
+Leadership & People Development
+Teamwork & Collaboration</textarea></label>
+              <label>KPIs<textarea name="kpis" rows="8">UPT|UNIT PER TRANSACTION|3|count|0.85
+ATV|AVERAGE TRANSACTION VALUE|2500|INR|0.9
+ASP|AVERAGE SELLING PRICE|1200|INR|0.9
+Conv|CONVERSION|30|%|0.85</textarea></label>
+              <button type="submit" class="primary">Generate Role</button>
+            </form>
+          </article>
+
+          <article class="panel stage-card">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Stage 2</p>
+                <h2>Review And Publish</h2>
+              </div>
+            </div>
+            <div id="role-status" class="empty">No generated role yet.</div>
+            <label class="review-box">Review Suggestions<textarea id="review-note" rows="4" placeholder="Request changes before publish."></textarea></label>
+            <div class="actions">
+              <button id="apply-review-btn" class="secondary" disabled>Apply Review</button>
+              <button id="publish-role-btn" class="primary" disabled>Publish Role</button>
+            </div>
+            <div id="role-detail" class="stack"></div>
+          </article>
+        </div>
+
+        <div class="grid two">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Stage 3</p>
+                <h2>Create Learner Account</h2>
+              </div>
+            </div>
+            <form id="learner-form" class="form">
+              <label>Name<input name="name" value="Asha Menon" required></label>
+              <label>Mobile Number<input name="phone_number" value="9000000003" required></label>
+              <label>Org Unit<input name="org_unit" value="Retail South"></label>
+              <label>Published Role<select id="role-select" name="role_id" required></select></label>
+              <button type="submit" class="primary">Create User And Assign Role</button>
+            </form>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Access Registry</p>
+                <h2>Owner And Learner Accounts</h2>
+              </div>
+            </div>
+            <div id="admin-summary" class="stack"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="learner" class="tab-panel learner-only">
+        <div class="grid two">
+          <article class="panel learner-primary">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Assigned Course</p>
+                <h2>My Learning Journey</h2>
+              </div>
+            </div>
+            <div id="learner-metrics" class="metric-banner empty">Sign in as a learner to view your role course.</div>
+            <div id="course-view" class="stack"></div>
+          </article>
+
+          <div class="stack">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Assessment</p>
+                  <h2>Mastery Check</h2>
+                </div>
+              </div>
+              <form id="assessment-form" class="stack"></form>
+              <button id="submit-assessment-btn" class="primary" disabled>Submit Assessment</button>
+              <div id="assessment-result" class="stack"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">KPI Tracking</p>
+                  <h2>Record KPI Observation</h2>
+                </div>
+              </div>
+              <form id="kpi-form" class="form">
+                <label>KPI<select id="kpi-select" name="kpi_id"></select></label>
+                <label>Actual Value<input name="value" type="number" step="0.01" required></label>
+                <label>Target Value<input name="target_value" type="number" step="0.01" required></label>
+                <label>Period<input name="period_label" value="Current Month"></label>
+                <label>Notes<textarea name="notes" rows="3"></textarea></label>
+                <button type="submit" class="primary">Record KPI</button>
+              </form>
+            </article>
           </div>
         </div>
-        <ul class="plain-list" id="module-list">
-          <li>Role framework management</li>
-          <li>Learning catalog and assessments</li>
-          <li>Employee creation</li>
-          <li>Evidence capture and readiness scoring</li>
-          <li>KPI observation and remediation analysis</li>
-          <li>LMS manager weak-pattern reporting</li>
-        </ul>
-      </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Weakness View</p>
+              <h2>My KPI And Remediation</h2>
+            </div>
+          </div>
+          <div id="kpi-view" class="stack"></div>
+        </article>
+      </section>
+
+      <section id="owner" class="tab-panel owner-only">
+        <div id="owner-summary" class="grid four summary-grid"></div>
+        <div class="grid two">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Role Metrics</p>
+                <h2>Performance By Role</h2>
+              </div>
+            </div>
+            <div id="role-metrics" class="stack"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Hotspots</p>
+                <h2>Weak Skills And KPI Patterns</h2>
+              </div>
+            </div>
+            <div id="hotspots" class="stack"></div>
+          </article>
+        </div>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Recent Events</p>
+              <h2>Owner Activity Log</h2>
+            </div>
+          </div>
+          <div id="activity-log" class="stack"></div>
+        </article>
+      </section>
     </section>
   </main>
+
   <script src="/app.js"></script>
 </body>
 </html>

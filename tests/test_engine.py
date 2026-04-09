@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 import unittest
 
 
@@ -8,224 +9,235 @@ SRC_PATH = os.path.join(PROJECT_ROOT, "src")
 if SRC_PATH not in sys.path:
     sys.path.insert(0, SRC_PATH)
 
-from lms_engine.bootstrap import build_container
+from lms_engine.ai import AIContentGenerator
+from lms_engine.application.mvp import AuthorizationError, LMSEngineService
+from lms_engine.storage import JsonStore
 
 
-class LMSEngineTestCase(unittest.TestCase):
+class LMSEngineMVPTestCase(unittest.TestCase):
     def setUp(self) -> None:
-        self.container = build_container()
+        self.temp_dir = tempfile.TemporaryDirectory()
+        store_path = os.path.join(self.temp_dir.name, "state.json")
+        self.service = LMSEngineService(store=JsonStore(store_path), generator=AIContentGenerator())
+        owner_code = self.service.request_login_code({"phone_number": self.service.default_owner_phone})["code"]
+        owner_login = self.service.verify_login_code(
+            {"phone_number": self.service.default_owner_phone, "code": owner_code}
+        )
+        self.owner_token = owner_login["token"]
 
-    def test_role_framework_learning_path_and_readiness(self) -> None:
-        coaching = self.container.role_framework.create_competency(
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    def test_owner_can_generate_publish_role_and_create_phone_user(self) -> None:
+        self.service.require_owner(self.owner_token)
+
+        role = self.service.generate_role_blueprint(
             {
-                "name": "Team Coaching",
-                "description": "Coach frontline staff on daily performance.",
-                "category": "people",
+                "segment": "Retail",
+                "title": "Store Manager",
+                "level": "L3",
+                "legacy_mappings": ["Store Lead"],
+                "work_summary": "Owns store performance and team growth.",
+                "responsibilities": [
+                    "Run compliant daily operations",
+                    "Coach the team on service and conversion",
+                    "Prepare strong staff for the next level",
+                ],
             }
         )
-        operations = self.container.role_framework.create_competency(
-            {
-                "name": "Store Operations",
-                "description": "Run opening, closing, and audit operations.",
-                "category": "operations",
-            }
-        )
+        self.assertEqual(role["status"], "draft")
+        reviewed = self.service.apply_role_review(role["id"], {"review_note": "Strengthen compliance emphasis."})
+        self.assertEqual(len(reviewed["review_notes"]), 1)
+        published = self.service.publish_role(role["id"])
+        self.assertEqual(published["status"], "published")
 
-        role = self.container.role_framework.create_role(
-            {
-                "name": "Store Manager",
-                "description": "Own store execution and team outcomes.",
-                "responsibilities": ["Run shifts", "Coach the team", "Maintain compliance"],
-                "growth_outcomes": ["Become promotion ready for Area Manager"],
-            }
-        )
-        self.container.role_framework.add_requirement(
-            role.id,
-            {
-                "competency_id": coaching.id,
-                "required_level": 4,
-                "mandatory": True,
-                "weight": 1.0,
-            },
-        )
-        self.container.role_framework.add_requirement(
-            role.id,
-            {
-                "competency_id": operations.id,
-                "required_level": 5,
-                "mandatory": True,
-                "weight": 1.2,
-            },
-        )
-
-        asset = self.container.learning_catalog.create_asset(
-            {
-                "title": "Daily Floor Coaching",
-                "summary": "How to coach store staff using floor observations.",
-                "content_type": "video",
-                "competency_ids": [coaching.id],
-                "estimated_minutes": 15,
-            }
-        )
-        assessment = self.container.learning_catalog.create_assessment(
-            {
-                "title": "Store Operations Certification",
-                "assessment_type": "practical",
-                "competency_ids": [operations.id],
-                "passing_score": 80,
-                "max_score": 100,
-            }
-        )
-
-        path = self.container.learning_paths.generate_for_role(role.id)
-        self.assertEqual(path.role_id, role.id)
-        self.assertEqual(len(path.items), 2)
-        self.assertIn(asset.id, path.items[0].asset_ids)
-        self.assertIn(assessment.id, path.items[1].assessment_ids)
-
-        employee = self.container.people.create_employee(
+        created = self.service.create_user(
             {
                 "name": "Asha",
-                "email": "asha@cult.fit",
-                "current_role_id": role.id,
+                "phone_number": "9000000011",
+                "role_id": role["id"],
                 "org_unit": "Retail South",
             }
         )
+        self.assertEqual(created["user"]["user_type"], "learner")
+        self.assertEqual(created["learner"]["phone_number"], "9000000011")
 
-        self.container.evidence.record_evidence(
-            employee.id,
+    def test_review_preserves_owner_defined_skills_and_kpis(self) -> None:
+        role = self.service.generate_role_blueprint(
             {
-                "competency_id": coaching.id,
-                "evidence_type": "manager_signoff",
-                "status": "verified",
-                "notes": "Observed weekly floor coaching.",
+                "segment": "Retail",
+                "title": "Store Manager",
+                "level": "L3",
+                "legacy_mappings": ["Store Lead"],
+                "work_summary": "Owns store performance and team growth.",
+                "responsibilities": ["Manage the store end to end"],
+                "skills": [
+                    "Adaptability & Problem Solving",
+                    "Communication & Empathy",
+                    "Customer Focus & Service Excellence",
+                    "Initiative & Drive for Results",
+                    "Leadership & People Development",
+                    "Teamwork & Collaboration",
+                ],
+                "kpis": [
+                    {
+                        "name": "UPT",
+                        "description": "UNIT PER TRANSACTION",
+                        "target_value": 3,
+                        "unit": "count",
+                        "weak_threshold": 0.85,
+                    },
+                    {
+                        "name": "ATV",
+                        "description": "AVERAGE TRANSACTION VALUE",
+                        "target_value": 2500,
+                        "unit": "INR",
+                        "weak_threshold": 0.9,
+                    },
+                    {
+                        "name": "ASP",
+                        "description": "AVERAGE SELLING PRICE",
+                        "target_value": 1200,
+                        "unit": "INR",
+                        "weak_threshold": 0.9,
+                    },
+                    {
+                        "name": "Conv",
+                        "description": "CONVERSION",
+                        "target_value": 30,
+                        "unit": "%",
+                        "weak_threshold": 0.85,
+                    },
+                ],
+            }
+        )
+
+        reviewed = self.service.apply_role_review(role["id"], {"review_note": "Add more floor coaching emphasis."})
+
+        self.assertEqual(
+            [item["name"] for item in reviewed["skills"]],
+            [
+                "Adaptability & Problem Solving",
+                "Communication & Empathy",
+                "Customer Focus & Service Excellence",
+                "Initiative & Drive for Results",
+                "Leadership & People Development",
+                "Teamwork & Collaboration",
+            ],
+        )
+        self.assertEqual([item["name"] for item in reviewed["kpis"]], ["UPT", "ATV", "ASP", "Conv"])
+
+    def test_phone_login_and_role_scoped_learner_flow(self) -> None:
+        role = self.service.generate_role_blueprint(
+            {
+                "segment": "Gym",
+                "title": "Area Manager",
+                "level": "L4",
+                "legacy_mappings": ["Cluster Manager"],
+                "work_summary": "Owns multi-club performance.",
+                "responsibilities": [
+                    "Review club performance weekly",
+                    "Coach gym managers on weak KPIs",
+                    "Maintain compliance standards",
+                ],
+            }
+        )
+        self.service.publish_role(role["id"])
+        created = self.service.create_user(
+            {
+                "name": "Riya Sharma",
+                "phone_number": "9000000022",
+                "role_id": role["id"],
+                "org_unit": "City East",
+            }
+        )
+        learner_id = created["learner"]["id"]
+
+        code = self.service.request_login_code({"phone_number": "9000000022"})["code"]
+        learner_login = self.service.verify_login_code({"phone_number": "9000000022", "code": code})
+        learner_token = learner_login["token"]
+        current_user = self.service.get_current_user(learner_token)
+        self.assertEqual(current_user["user_type"], "learner")
+        self.assertEqual(current_user["learner_id"], learner_id)
+
+        dashboard = self.service.get_my_dashboard(learner_token)
+        self.assertEqual(dashboard["learner"]["id"], learner_id)
+        lesson = dashboard["enrollment"]["course"]["sections"][0]["lessons"][0]
+        self.service.complete_my_lesson(learner_token, lesson["id"])
+
+        dashboard = self.service.get_my_dashboard(learner_token)
+        self.assertEqual(dashboard["metrics"]["lessons_completed"], 1)
+
+        questions = dashboard["enrollment"]["course"]["assessment"]["questions"]
+        answers = [
+            {
+                "question_id": question["id"],
+                "selected_option_index": question["correct_option_index"],
+            }
+            for question in questions
+        ]
+        attempt = self.service.submit_my_assessment(learner_token, {"answers": answers})
+        self.assertTrue(attempt["passed"])
+
+        weak_result = self.service.record_my_kpi(
+            learner_token,
+            {
+                "kpi_id": dashboard["role"]["kpis"][0]["id"],
+                "value": 40,
+                "target_value": dashboard["role"]["kpis"][0]["target_value"],
+                "period_label": "May 2026",
             },
         )
-        self.container.evidence.record_evidence(
-            employee.id,
+        self.assertEqual(weak_result["observation"]["status"], "weak")
+        self.assertTrue(weak_result["assignments"])
+
+        self.service.record_my_kpi(
+            learner_token,
             {
-                "competency_id": operations.id,
-                "evidence_type": "practical_evaluation",
-                "status": "passed",
-                "score": 100,
-                "max_score": 100,
+                "kpi_id": dashboard["role"]["kpis"][0]["id"],
+                "value": dashboard["role"]["kpis"][0]["target_value"],
+                "target_value": dashboard["role"]["kpis"][0]["target_value"],
+                "period_label": "June 2026",
             },
         )
+        updated_dashboard = self.service.get_my_dashboard(learner_token)
+        self.assertEqual(updated_dashboard["metrics"]["weak_kpis"], 0)
+        self.assertEqual(updated_dashboard["remediation_assignments"][0]["status"], "resolved")
 
-        readiness = self.container.readiness.evaluate(employee.id)
-        self.assertEqual(readiness.compliance_score, 100.0)
-        self.assertEqual(readiness.competency_coverage, 100.0)
-        self.assertTrue(readiness.ready)
-
-    def test_kpi_analysis_recommends_learning_and_manager_insights(self) -> None:
-        conversion = self.container.role_framework.create_competency(
+    def test_owner_and_learner_permissions_are_separated(self) -> None:
+        role = self.service.generate_role_blueprint(
             {
-                "name": "Sales Conversion",
-                "description": "Convert walk-ins into revenue.",
-                "category": "commercial",
+                "segment": "Retail",
+                "title": "Store Manager",
+                "level": "L3",
+                "legacy_mappings": ["Store Lead"],
+                "work_summary": "Owns store performance.",
+                "responsibilities": [
+                    "Run compliant daily operations",
+                    "Coach the team",
+                    "Review KPI weak areas",
+                ],
             }
         )
-        coaching = self.container.role_framework.create_competency(
-            {
-                "name": "Team Coaching",
-                "description": "Coach staff against weak sales metrics.",
-                "category": "people",
-            }
-        )
-
-        role = self.container.role_framework.create_role(
-            {
-                "name": "Store Manager",
-                "description": "Drive store conversion and people performance.",
-                "responsibilities": ["Manage the store floor"],
-                "growth_outcomes": ["Improve team-level commercial execution"],
-            }
-        )
-        self.container.role_framework.add_requirement(
-            role.id,
-            {
-                "competency_id": conversion.id,
-                "required_level": 4,
-                "mandatory": True,
-                "weight": 1.1,
-            },
-        )
-
-        asset = self.container.learning_catalog.create_asset(
-            {
-                "title": "Conversion Recovery Clinic",
-                "summary": "Improve low conversion through scripting.",
-                "content_type": "microlearning",
-                "competency_ids": [conversion.id, coaching.id],
-                "estimated_minutes": 10,
-            }
-        )
-        assessment = self.container.learning_catalog.create_assessment(
-            {
-                "title": "Conversion Scenario Test",
-                "assessment_type": "scenario",
-                "competency_ids": [conversion.id],
-                "passing_score": 75,
-                "max_score": 100,
-            }
-        )
-        kpi = self.container.kpis.create_kpi(
-            {
-                "name": "Conversion Rate",
-                "description": "Inbound lead conversion performance.",
-                "competency_ids": [conversion.id, coaching.id],
-                "weak_threshold": 0.85,
-            }
-        )
-
-        first_employee = self.container.people.create_employee(
-            {
-                "name": "Asha",
-                "email": "asha@cult.fit",
-                "current_role_id": role.id,
-                "org_unit": "Retail South",
-            }
-        )
-        second_employee = self.container.people.create_employee(
+        self.service.publish_role(role["id"])
+        created = self.service.create_user(
             {
                 "name": "Dev",
-                "email": "dev@cult.fit",
-                "current_role_id": role.id,
+                "phone_number": "9000000033",
+                "role_id": role["id"],
                 "org_unit": "Retail West",
             }
         )
+        code = self.service.request_login_code({"phone_number": "9000000033"})["code"]
+        learner_login = self.service.verify_login_code({"phone_number": "9000000033", "code": code})
+        learner_token = learner_login["token"]
 
-        self.container.kpis.record_observation(
-            first_employee.id,
-            {
-                "kpi_id": kpi.id,
-                "value": 18,
-                "target_value": 25,
-                "period_label": "March 2026",
-            },
-        )
-        self.container.kpis.record_observation(
-            second_employee.id,
-            {
-                "kpi_id": kpi.id,
-                "value": 16,
-                "target_value": 25,
-                "period_label": "March 2026",
-            },
-        )
+        with self.assertRaises(AuthorizationError):
+            self.service.require_owner(learner_token)
 
-        analysis = self.container.kpis.analyze_employee(first_employee.id)
-        self.assertEqual(len(analysis.weak_kpis), 1)
-        self.assertEqual(analysis.weak_kpis[0].kpi_id, kpi.id)
-        self.assertIn(asset.id, analysis.weak_kpis[0].asset_ids)
-        self.assertIn(assessment.id, analysis.weak_kpis[0].assessment_ids)
-
-        report = self.container.kpis.manager_improvement_report()
-        self.assertEqual(len(report.weak_kpis), 1)
-        self.assertEqual(report.weak_kpis[0].weak_observation_count, 2)
-        self.assertEqual(report.weak_kpis[0].affected_employee_count, 2)
-        self.assertEqual(report.weak_kpis[0].linked_asset_count, 1)
-        self.assertEqual(report.weak_kpis[0].linked_assessment_count, 1)
+        owner = self.service.get_current_user(self.owner_token)
+        self.assertEqual(owner["user_type"], "owner")
+        self.assertEqual(created["user"]["user_type"], "learner")
 
 
 if __name__ == "__main__":

@@ -1,39 +1,30 @@
-# LMS Engine
+# LMS Engine MVP
 
-This service is the backend engine for a role-readiness LMS. It is centered on:
+This is a working LMS MVP for role-based learning, assessments, KPI remediation, and owner metrics.
 
-- roles
-- competencies
-- evidence
-- KPI-driven remediation
-- LMS-manager improvement insights
+## What It Does
 
-The engine exposes a small JSON API using the Python standard library so it can
-run in a clean environment without framework dependencies.
+- generate a role blueprint from role inputs
+- review and publish a role learning path
+- create AI-generated or fallback-generated course content
+- enroll learners into the published role course
+- let learners complete lessons and submit assessments
+- analyze weak skills and likely KPI risk areas from assessment results
+- record KPI observations and assign KPI-specific remediation
+- show owner metrics for role performance, weak skills, weak KPIs, and recent activity
 
-## Core Concepts
+## AI Support
 
-- `Role`: business responsibility and growth context.
-- `Competency`: capability required to perform a role well.
-- `Evidence`: proof that a learner has demonstrated a competency.
-- `KPI`: business metric linked back to competencies so weak performance can
-  trigger remediation.
+If `OPENAI_API_KEY` is set, the role blueprint and course draft use the OpenAI Responses API.
 
-Courses, content, assessments, and readiness reports exist to support these
-core entities. The platform now supports two connected loops:
+If `OPENAI_API_KEY` is not set, the app still works using a deterministic fallback generator.
 
-- learner remediation when KPI performance drops
-- content improvement when the LMS manager sees repeated weak KPI patterns
+Optional environment variables:
 
-## Modules
-
-- `domain`: entity definitions and enums
-- `repositories`: in-memory repositories for the first engine iteration
-- `application`: business services for framework management, learning paths,
-  evidence capture, readiness scoring, KPI analysis, and improvement insights
-- `api`: lightweight HTTP interface
-- `ui`: static dashboard for the learner-remediation and manager-improvement
-  loops
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL` default: `gpt-4.1-mini`
+- `HOST` default: `127.0.0.1`
+- `PORT` default: `8000`
 
 ## Run
 
@@ -41,35 +32,48 @@ core entities. The platform now supports two connected loops:
 python3 main.py
 ```
 
-The server starts on `http://127.0.0.1:8000`.
+If port `8000` is busy:
+
+```bash
+PORT=8010 python3 main.py
+```
 
 The UI is served from `/`.
 
-## Key Endpoints
+## Main Flows
 
-- `GET /health`
-- `GET /roles`
-- `POST /roles`
-- `POST /roles/{role_id}/requirements`
-- `GET /competencies`
-- `POST /competencies`
-- `GET /assets`
-- `POST /assets`
-- `GET /assessments`
-- `POST /assessments`
-- `GET /employees`
-- `POST /employees`
-- `GET /kpis`
-- `POST /kpis`
-- `POST /roles/{role_id}/learning-path/generate`
-- `GET /roles/{role_id}/learning-path`
-- `POST /employees/{employee_id}/evidence`
-- `POST /employees/{employee_id}/kpi-observations`
-- `GET /employees/{employee_id}/kpi-analysis`
-- `GET /employees/{employee_id}/readiness`
-- `GET /analytics/weak-kpis`
-- `GET /dashboard/summary`
-- `POST /demo/seed`
+### Admin Studio
+
+- create or generate a role blueprint
+- review the AI draft
+- publish the role
+- create learner enrollments
+
+### Learner Experience
+
+- open assigned course
+- mark lessons complete
+- take the assessment
+- inspect weak-skill analysis
+- record KPI observations
+- receive remediation when KPIs are weak
+
+### Owner Metrics
+
+- learner counts
+- completion percentage
+- assessment averages
+- weak skill hotspots
+- weak KPI hotspots
+- event log
+
+## Persistence
+
+App state is stored in:
+
+- `src/lms_engine/data/state.json`
+
+This is file-backed persistence for MVP use, not a production database.
 
 ## Test
 
