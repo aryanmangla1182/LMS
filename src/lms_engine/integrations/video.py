@@ -14,10 +14,14 @@ from urllib.error import HTTPError, URLError
 from lms_engine.domain.models import VideoScenePlan, VideoVersionStatus
 from lms_engine.integrations.local_video_assets import (
     ensure_directory,
+    export_final_audio_track,
     render_mock_video_bundle,
     render_scene_clip,
     stitch_scene_clips,
 )
+
+
+DEFAULT_ELEVENLABS_VOICE_ID = "ack0QsRaQyDLnVyMQTSd"
 
 
 class VideoGenerationGateway(ABC):
@@ -63,9 +67,23 @@ class DemoVideoGateway(VideoGenerationGateway):
 class LocalStoryboardVideoGateway(VideoGenerationGateway):
     provider_name = "local_storyboard"
 
-    def __init__(self, output_root: str, render_mode: str = "render") -> None:
+    def __init__(
+        self,
+        output_root: str,
+        render_mode: str = "render",
+        voice_provider: str = "system",
+        local_voice_name: str = "Samantha",
+        elevenlabs_api_key: str = "",
+        elevenlabs_voice_id: str = "",
+        elevenlabs_model_id: str = "eleven_multilingual_v2",
+    ) -> None:
         self.output_root = ensure_directory(Path(output_root))
         self.render_mode = render_mode
+        self.voice_provider = voice_provider
+        self.local_voice_name = local_voice_name
+        self.elevenlabs_api_key = elevenlabs_api_key
+        self.elevenlabs_voice_id = elevenlabs_voice_id
+        self.elevenlabs_model_id = elevenlabs_model_id
         self.asset_paths: Dict[str, Path] = {}
 
     def generate_scene_clips(self, scene_plan: List[VideoScenePlan]) -> Dict[str, object]:
@@ -74,10 +92,20 @@ class LocalStoryboardVideoGateway(VideoGenerationGateway):
             scene_paths, final_path = render_mock_video_bundle(scene_plan, bundle_dir)
         else:
             scene_paths = [
-                render_scene_clip(scene, bundle_dir, index)
+                render_scene_clip(
+                    scene,
+                    bundle_dir,
+                    index,
+                    voice_provider=self.voice_provider,
+                    voice_name=self.local_voice_name,
+                    elevenlabs_api_key=self.elevenlabs_api_key,
+                    elevenlabs_voice_id=self.elevenlabs_voice_id,
+                    elevenlabs_model_id=self.elevenlabs_model_id,
+                )
                 for index, scene in enumerate(scene_plan)
             ]
             final_path = stitch_scene_clips(scene_paths, bundle_dir)
+            export_final_audio_track(final_path, bundle_dir)
 
         job_ids: List[str] = []
         for scene, scene_path in zip(scene_plan, scene_paths):
@@ -254,6 +282,11 @@ def build_video_gateway(
         return LocalStoryboardVideoGateway(
             output_root=read_setting("LMS_VIDEO_OUTPUT_ROOT", ".generated_videos"),
             render_mode=read_setting("LMS_VIDEO_RENDER_MODE", "render"),
+            voice_provider=read_setting("LMS_VOICE_PROVIDER", "system"),
+            local_voice_name=read_setting("LOCAL_VOICE_NAME", "Samantha"),
+            elevenlabs_api_key=read_setting("ELEVENLABS_API_KEY"),
+            elevenlabs_voice_id=DEFAULT_ELEVENLABS_VOICE_ID,
+            elevenlabs_model_id=read_setting("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2"),
         )
 
     api_key = read_setting("OPENAI_API_KEY")
