@@ -59,8 +59,6 @@ body {
   line-height: 0.98;
   letter-spacing: -0.04em;
   max-width: 12ch;
-  font-family: "Avenir Next", "SF Pro Display", "Segoe UI", sans-serif;
-  font-weight: 800;
 }
 
 .hero-copy-block {
@@ -419,8 +417,8 @@ body {
   font-size: 1rem;
 }
 
-.review-path-card[open] .learning-path-summary::after,
-.learner-module-card[open] .learning-path-summary::after {
+.review-path-card[open] > .learning-path-summary::after,
+.learner-module-card[open] > .learning-path-summary::after {
   content: "−";
 }
 
@@ -484,6 +482,13 @@ body {
 
 .asset-actions {
   padding-top: 2px;
+}
+
+.review-kpi-shell {
+  display: grid;
+  gap: 16px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
 }
 
 .tabs {
@@ -846,6 +851,46 @@ button:disabled {
   transform: translateY(-1px);
   border-color: #99f6e4;
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+}
+
+.studio-layout {
+  align-items: start;
+  gap: 16px;
+}
+
+.studio-summary-card,
+.studio-queue-head,
+.studio-detail-card,
+.studio-feedback-form,
+.studio-item-card {
+  display: grid;
+  gap: 12px;
+}
+
+.studio-item-card.is-active,
+.studio-version-active {
+  border-color: #99f6e4;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+}
+
+.studio-item-card {
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+}
+
+.studio-item-locked .learning-path-summary {
+  cursor: not-allowed;
+}
+
+.studio-item-locked .learning-path-summary::after {
+  background: #f8fafc;
+  color: var(--muted);
+}
+
+.studio-video-player {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #0f172a;
 }
 
 .scroll-panel {

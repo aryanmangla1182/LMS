@@ -136,6 +136,8 @@
                 </select>
               </label>
               <label>Role Title<input name="title" value="Store Manager" required></label>
+              <label>Level<input name="level" value="L3" required></label>
+              <label>Legacy Mapping<input name="legacy_mappings" value="Store Lead, Senior Associate"></label>
               <label>Work Summary<textarea name="work_summary" rows="3">Owns day-to-day store performance, staff coaching, compliance, and local business outcomes.</textarea></label>
               <label>Responsibilities<textarea name="responsibilities" rows="6">Open and close the store without compliance gaps
 Coach staff on service and conversion
@@ -170,13 +172,24 @@ Conv|CONVERSION|30|%|0.85</textarea></label>
             <div class="review-layout">
               <div id="role-status" class="empty">No role selected for review yet.</div>
               <div id="role-detail" class="stack role-detail-stack"></div>
+              <section id="review-kpi-section" class="review-kpi-shell review-stage review-stage-box">
+                <div class="review-stage-head">
+                  <div>
+                    <p class="eyebrow">2. Learning Path</p>
+                    <h3>Learner Course Preview</h3>
+                  </div>
+                  <p class="meta">Review KPI and skill videos, approve learner-facing versions, and generate quizzes from here.</p>
+                </div>
+                <div id="kpi-studio-summary" class="stack"></div>
+                <div id="kpi-studio-list" class="stack"></div>
+              </section>
               <section id="review-input-section" class="review-box">
                 <div class="review-box-head">
                   <div>
                     <p class="eyebrow">3. Review Input</p>
                     <h3>Review Notes And Approval</h3>
                   </div>
-                  <p class="meta">Capture reviewer suggestions here, then approve once the role input and learning path look right.</p>
+                  <p class="meta">Capture reviewer suggestions here, then approve once the role input and learner course preview look right.</p>
                 </div>
                 <div id="role-review-history" class="stack review-history-list"></div>
                 <label>
@@ -228,6 +241,7 @@ Conv|CONVERSION|30|%|0.85</textarea></label>
             <form id="learner-form" class="form">
               <label>Name<input name="name" value="Asha Menon" required></label>
               <label>Mobile Number<input name="phone_number" value="9000000003" required></label>
+              <label>Org Unit<input name="org_unit" value="Retail South"></label>
               <label>Published Role<select id="role-select" name="role_id" required></select></label>
               <button type="submit" class="primary">Create User And Assign Role</button>
             </form>
@@ -297,6 +311,18 @@ Conv|CONVERSION|30|%|0.85</textarea></label>
               </div>
             </div>
             <div id="role-metrics" class="stack"></div>
+          </article>
+        </section>
+
+        <section id="trainer-hotspots" class="subtab-panel" data-group="trainer">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Hotspots</p>
+                <h2>Weak Skills And KPI Patterns</h2>
+              </div>
+            </div>
+            <div id="hotspots" class="stack"></div>
           </article>
         </section>
       </section>

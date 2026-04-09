@@ -44,6 +44,20 @@ class KPIStatus(str, Enum):
     WEAK = "weak"
 
 
+class KPIStudioStatus(str, Enum):
+    DRAFT = "draft"
+    REVIEW = "review"
+    APPROVED = "approved"
+
+
+class VideoVersionStatus(str, Enum):
+    QUEUED = "queued"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    APPROVED = "approved"
+
+
 @dataclass
 class Competency:
     name: str
@@ -224,3 +238,78 @@ class ReadinessReport:
     ready: bool
     gaps: List[ReadinessGap]
     generated_at: datetime = field(default_factory=utc_now)
+
+
+@dataclass
+class VideoScenePlan:
+    scene_number: int
+    title: str
+    duration_seconds: int
+    narration: str
+    visual_direction: str
+    sora_prompt: str
+    clip_url: Optional[str] = None
+    job_id: Optional[str] = None
+    status: VideoVersionStatus = VideoVersionStatus.QUEUED
+    error_message: str = ""
+
+
+@dataclass
+class VideoGenerationJob:
+    provider: str
+    status: VideoVersionStatus
+    progress: int
+    job_ids: List[str]
+    error: str = ""
+
+
+@dataclass
+class QuizQuestion:
+    prompt: str
+    options: List[str]
+    correct_option_index: int
+    explanation: str
+    id: str = field(default_factory=lambda: generate_id("qq"))
+
+
+@dataclass
+class KPIQuiz:
+    role_name: str
+    kpi_name: str
+    video_version_id: str
+    questions: List[QuizQuestion]
+    id: str = field(default_factory=lambda: generate_id("quiz"))
+    created_at: datetime = field(default_factory=utc_now)
+
+
+@dataclass
+class VideoVersion:
+    version_number: int
+    source_type: str
+    operator_notes: str
+    scene_plan: List[VideoScenePlan]
+    prompt_used: str
+    status: VideoVersionStatus
+    generation_job: VideoGenerationJob
+    video_url: str = ""
+    id: str = field(default_factory=lambda: generate_id("vid"))
+    created_at: datetime = field(default_factory=utc_now)
+
+
+@dataclass
+class KPIStudioItem:
+    kpi_name: str
+    category: str
+    training_objective: str
+    role_name: str = ""
+    target_duration_range: str = "60-90 seconds"
+    script_draft: str = ""
+    storyboard_prompt_draft: str = ""
+    revision_prompt_history: List[str] = field(default_factory=list)
+    video_versions: List[VideoVersion] = field(default_factory=list)
+    final_version_id: Optional[str] = None
+    quiz: Optional[KPIQuiz] = None
+    studio_status: KPIStudioStatus = KPIStudioStatus.DRAFT
+    published: bool = False
+    id: str = field(default_factory=lambda: generate_id("studio"))
+    created_at: datetime = field(default_factory=utc_now)
