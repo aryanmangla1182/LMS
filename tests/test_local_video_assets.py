@@ -15,6 +15,7 @@ from lms_engine.domain.models import VideoScenePlan
 from lms_engine.integrations.local_video_assets import (
     build_scene_svg,
     export_final_audio_track,
+    render_openai_voiceover,
     render_voice_track,
     render_elevenlabs_voiceover,
     write_concat_file,
@@ -102,6 +103,42 @@ class LocalVideoAssetsTestCase(unittest.TestCase):
             self.assertIn(b'"text": "Coach the team through a better floor conversion example."', req.data)
             self.assertIn(b'"model_id": "eleven_multilingual_v2"', req.data)
 
+    def test_render_openai_voiceover_writes_response_bytes(self) -> None:
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self) -> bytes:
+                return b"mock-openai-mp3-audio"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "voiceover.mp3"
+            with patch(
+                "lms_engine.integrations.local_video_assets.request.urlopen",
+                return_value=FakeResponse(),
+            ) as mocked_urlopen:
+                render_openai_voiceover(
+                    text="Coach the team through a better floor conversion example.",
+                    output_path=output_path,
+                    api_key="test-openai-key",
+                    model="gpt-4o-mini-tts",
+                    voice="marin",
+                    base_url="https://api.openai.com/v1",
+                )
+
+            self.assertTrue(output_path.exists())
+            self.assertEqual(output_path.read_bytes(), b"mock-openai-mp3-audio")
+            req = mocked_urlopen.call_args.args[0]
+            self.assertEqual(req.full_url, "https://api.openai.com/v1/audio/speech")
+            self.assertEqual(req.get_method(), "POST")
+            self.assertEqual(req.headers["Authorization"], "Bearer test-openai-key")
+            self.assertEqual(req.headers["Content-type"], "application/json")
+            self.assertIn(b'"model": "gpt-4o-mini-tts"', req.data)
+            self.assertIn(b'"voice": "marin"', req.data)
+            self.assertIn(b'"response_format": "mp3"', req.data)
     def test_render_voice_track_requires_elevenlabs_credentials(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             output_path = Path(temp_dir) / "voiceover.mp3"
@@ -111,7 +148,20 @@ class LocalVideoAssetsTestCase(unittest.TestCase):
                     output_path=output_path,
                     voice_provider="elevenlabs",
                     elevenlabs_api_key="",
-                    elevenlabs_voice_id="ack0QsRaQyDLnVyMQTSd",
+                    elevenlabs_voice_id="siw1N9V8LmYeEWKyWBxv",
+                )
+
+    def test_render_voice_track_requires_openai_credentials(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "voiceover.mp3"
+            with self.assertRaisesRegex(ValueError, "OpenAI voice is selected but OPENAI_API_KEY is missing"):
+                render_voice_track(
+                    text="Coach the team through a better floor conversion example.",
+                    output_path=output_path,
+                    voice_provider="openai",
+                    openai_api_key="",
+                    openai_tts_model="gpt-4o-mini-tts",
+                    openai_tts_voice="marin",
                 )
 
     def test_export_final_audio_track_builds_debug_audio_file(self) -> None:

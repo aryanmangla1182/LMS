@@ -71,6 +71,7 @@ const kpiStudioList = document.getElementById("kpi-studio-list");
 const kpiStudioDetail = document.getElementById("kpi-studio-detail");
 const adminSummary = document.getElementById("admin-summary");
 const learnerCourseTitle = document.getElementById("learner-course-title");
+const learnerMetrics = document.getElementById("learner-metrics");
 const courseView = document.getElementById("course-view");
 const voiceView = document.getElementById("voice-view");
 const lessonPlayerModal = document.getElementById("lesson-player-modal");
@@ -1238,6 +1239,7 @@ function renderLearnerVoicePage(dashboard) {
   voiceView.innerHTML = renderPitchAnalyzer(dashboard);
   attachLearnerVoiceHandlers();
 }
+
 function renderLearnerDashboard(dashboard) {
   state.learnerDashboard = dashboard;
   initializeInlineVideoPlayers(dashboard);
@@ -1247,11 +1249,30 @@ function renderLearnerDashboard(dashboard) {
     questions.map((question) => [question.id, Object.prototype.hasOwnProperty.call(previousAnswers, question.id) ? previousAnswers[question.id] : null])
   );
   state.currentQuestionIndex = Math.min(state.currentQuestionIndex, Math.max(questions.length - 1, 0));
+  const metrics = dashboard.metrics;
+  learnerMetrics.innerHTML = `
+    <div class="inline">
+      <strong>${escapeHtml(dashboard.role.title)}</strong>
+      <span class="chip soft">${escapeHtml(dashboard.role.segment)}</span>
+      <span class="chip">${escapeHtml(dashboard.role.level)}</span>
+    </div>
+    <div class="meta">${escapeHtml(dashboard.role.summary || dashboard.role.work_summary || "")}</div>
+    <div class="progress-track"><div class="progress-fill" style="width:${metrics.completion_percentage}%"></div></div>
+    <div class="metric-grid">
+      <div class="metric-item"><span class="meta">Completion</span><strong>${metrics.completion_percentage}%</strong></div>
+      <div class="metric-item"><span class="meta">Assessment</span><strong>${metrics.latest_assessment_score ?? "--"}</strong></div>
+      <div class="metric-item"><span class="meta">Weak Skills</span><strong>${metrics.weak_skill_count}</strong></div>
+      <div class="metric-item"><span class="meta">Weak KPIs</span><strong>${metrics.weak_kpis}</strong></div>
+    </div>
+  `;
   renderLearnerVoicePage(dashboard);
   renderLearnerCoursePage(dashboard);
+  renderLearnerReview(dashboard);
 }
 
 function renderLearnerCoursePage(dashboard) {
+  const latestAttempt = dashboard.latest_assessment;
+  const openImprovementPlan = (dashboard.remediation_assignments || []).find((item) => item.status === "assigned");
   const sections = dashboard.enrollment.course.sections || [];
   learnerCourseTitle.textContent = `${dashboard.role.title} Course`;
 
@@ -2132,10 +2153,25 @@ roleForm.addEventListener("submit", async (event) => {
     kpis: parseKpis(formData.get("kpis")),
   };
   try {
-    const roleRes = await fetchJson("/api/roles/generate", { method: "POST", body: JSON.stringify(payload) });
+    const [roleRes, studioRes] = await Promise.all([
+      fetchJson("/api/roles/generate", { method: "POST", body: JSON.stringify(payload) }),
+      fetchJson("/studio/session", {
+        method: "POST",
+        body: JSON.stringify({ ...payload, role_name: payload.title }),
+      }),
+    ]);
     state.selectedRoleId = roleRes.item.id;
+    state.kpiStudio.items = studioRes.items;
+    state.kpiStudio.roleName = String(payload.title || "");
+    state.kpiStudio.activeItemId = null;
+    state.kpiStudio.activeVersionId = null;
+    state.kpiStudio.openItemIds = [];
+    state.kpiStudio.openQuizItemIds = [];
+    state.kpiStudio.lastError = "";
     setSubtab("admin", "trainer-review");
     await refreshTrainerData();
+    renderKpiStudio();
+    await generateStudioCourse();
   } catch (error) {
     alert(error.message);
   }
