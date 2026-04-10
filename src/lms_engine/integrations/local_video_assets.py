@@ -108,6 +108,42 @@ def render_elevenlabs_voiceover(
         raise ValueError("ElevenLabs voice request failed: {0}".format(exc.reason)) from exc
 
 
+def render_openai_voiceover(
+    text: str,
+    output_path: Path,
+    api_key: str,
+    model: str = "gpt-4o-mini-tts",
+    voice: str = "marin",
+    instructions: str = "",
+    base_url: str = "https://api.openai.com/v1",
+) -> None:
+    payload = {
+        "model": model,
+        "input": text,
+        "voice": voice,
+        "response_format": "mp3",
+    }
+    if instructions:
+        payload["instructions"] = instructions
+    req = request.Request(
+        "{0}/audio/speech".format(base_url.rstrip("/")),
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": "Bearer {0}".format(api_key),
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with request.urlopen(req, timeout=60) as response:
+            output_path.write_bytes(response.read())
+    except HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        raise ValueError("OpenAI voice request failed: {0}".format(body or exc.reason)) from exc
+    except URLError as exc:
+        raise ValueError("OpenAI voice request failed: {0}".format(exc.reason)) from exc
+
+
 def render_voice_track(
     text: str,
     output_path: Path,
@@ -116,6 +152,11 @@ def render_voice_track(
     elevenlabs_api_key: str = "",
     elevenlabs_voice_id: str = "",
     elevenlabs_model_id: str = "eleven_multilingual_v2",
+    openai_api_key: str = "",
+    openai_tts_model: str = "gpt-4o-mini-tts",
+    openai_tts_voice: str = "marin",
+    openai_tts_instructions: str = "",
+    openai_base_url: str = "https://api.openai.com/v1",
 ) -> None:
     if voice_provider == "elevenlabs":
         if not elevenlabs_api_key:
@@ -128,6 +169,19 @@ def render_voice_track(
             api_key=elevenlabs_api_key,
             voice_id=elevenlabs_voice_id,
             model_id=elevenlabs_model_id,
+        )
+        return
+    if voice_provider == "openai":
+        if not openai_api_key:
+            raise ValueError("OpenAI voice is selected but OPENAI_API_KEY is missing")
+        render_openai_voiceover(
+            text=text,
+            output_path=output_path,
+            api_key=openai_api_key,
+            model=openai_tts_model,
+            voice=openai_tts_voice,
+            instructions=openai_tts_instructions,
+            base_url=openai_base_url,
         )
         return
     render_voiceover(text, output_path, voice_name=voice_name)
@@ -263,10 +317,18 @@ def render_scene_clip(
     elevenlabs_api_key: str = "",
     elevenlabs_voice_id: str = "",
     elevenlabs_model_id: str = "eleven_multilingual_v2",
+    openai_api_key: str = "",
+    openai_tts_model: str = "gpt-4o-mini-tts",
+    openai_tts_voice: str = "marin",
+    openai_tts_instructions: str = "",
+    openai_base_url: str = "https://api.openai.com/v1",
 ) -> Path:
     audio_extension = (
         "mp3"
-        if voice_provider == "elevenlabs" and elevenlabs_api_key and elevenlabs_voice_id
+        if (
+            (voice_provider == "elevenlabs" and elevenlabs_api_key and elevenlabs_voice_id)
+            or (voice_provider == "openai" and openai_api_key)
+        )
         else "aiff"
     )
     audio_path = output_dir / "scene_{0:02d}.{1}".format(scene.scene_number, audio_extension)
@@ -280,6 +342,11 @@ def render_scene_clip(
         elevenlabs_api_key=elevenlabs_api_key,
         elevenlabs_voice_id=elevenlabs_voice_id,
         elevenlabs_model_id=elevenlabs_model_id,
+        openai_api_key=openai_api_key,
+        openai_tts_model=openai_tts_model,
+        openai_tts_voice=openai_tts_voice,
+        openai_tts_instructions=openai_tts_instructions,
+        openai_base_url=openai_base_url,
     )
     duration = audio_duration_seconds(audio_path, scene.narration) + 0.5
     card_path = render_scene_card(scene, output_dir, scene_index)

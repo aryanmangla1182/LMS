@@ -21,7 +21,7 @@ from lms_engine.integrations.local_video_assets import (
 )
 
 
-DEFAULT_ELEVENLABS_VOICE_ID = "ack0QsRaQyDLnVyMQTSd"
+DEFAULT_ELEVENLABS_VOICE_ID = "siw1N9V8LmYeEWKyWBxv"
 
 
 class VideoGenerationGateway(ABC):
@@ -76,6 +76,11 @@ class LocalStoryboardVideoGateway(VideoGenerationGateway):
         elevenlabs_api_key: str = "",
         elevenlabs_voice_id: str = "",
         elevenlabs_model_id: str = "eleven_multilingual_v2",
+        openai_api_key: str = "",
+        openai_base_url: str = "https://api.openai.com/v1",
+        openai_tts_model: str = "gpt-4o-mini-tts",
+        openai_tts_voice: str = "marin",
+        openai_tts_instructions: str = "",
     ) -> None:
         self.output_root = ensure_directory(Path(output_root))
         self.render_mode = render_mode
@@ -84,6 +89,11 @@ class LocalStoryboardVideoGateway(VideoGenerationGateway):
         self.elevenlabs_api_key = elevenlabs_api_key
         self.elevenlabs_voice_id = elevenlabs_voice_id
         self.elevenlabs_model_id = elevenlabs_model_id
+        self.openai_api_key = openai_api_key
+        self.openai_base_url = openai_base_url
+        self.openai_tts_model = openai_tts_model
+        self.openai_tts_voice = openai_tts_voice
+        self.openai_tts_instructions = openai_tts_instructions
         self.asset_paths: Dict[str, Path] = {}
 
     def generate_scene_clips(self, scene_plan: List[VideoScenePlan]) -> Dict[str, object]:
@@ -101,6 +111,11 @@ class LocalStoryboardVideoGateway(VideoGenerationGateway):
                     elevenlabs_api_key=self.elevenlabs_api_key,
                     elevenlabs_voice_id=self.elevenlabs_voice_id,
                     elevenlabs_model_id=self.elevenlabs_model_id,
+                    openai_api_key=self.openai_api_key,
+                    openai_tts_model=self.openai_tts_model,
+                    openai_tts_voice=self.openai_tts_voice,
+                    openai_tts_instructions=self.openai_tts_instructions,
+                    openai_base_url=self.openai_base_url,
                 )
                 for index, scene in enumerate(scene_plan)
             ]
@@ -279,14 +294,23 @@ def build_video_gateway(
         return DemoVideoGateway()
 
     if provider == "local":
+        default_voice_provider = "openai" if read_setting("OPENAI_API_KEY") else "system"
         return LocalStoryboardVideoGateway(
             output_root=read_setting("LMS_VIDEO_OUTPUT_ROOT", ".generated_videos"),
             render_mode=read_setting("LMS_VIDEO_RENDER_MODE", "render"),
-            voice_provider=read_setting("LMS_VOICE_PROVIDER", "system"),
+            voice_provider=read_setting("LMS_VOICE_PROVIDER", default_voice_provider),
             local_voice_name=read_setting("LOCAL_VOICE_NAME", "Samantha"),
             elevenlabs_api_key=read_setting("ELEVENLABS_API_KEY"),
             elevenlabs_voice_id=DEFAULT_ELEVENLABS_VOICE_ID,
             elevenlabs_model_id=read_setting("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2"),
+            openai_api_key=read_setting("OPENAI_API_KEY"),
+            openai_base_url=read_setting("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+            openai_tts_model=read_setting("OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
+            openai_tts_voice=read_setting("OPENAI_TTS_VOICE", "marin"),
+            openai_tts_instructions=read_setting(
+                "OPENAI_TTS_INSTRUCTIONS",
+                "Speak clearly, warmly, and at a measured pace for frontline retail training in India. Pronounce KPI terms carefully.",
+            ),
         )
 
     api_key = read_setting("OPENAI_API_KEY")

@@ -58,9 +58,29 @@ class VideoConfigTestCase(unittest.TestCase):
         self.assertIsInstance(gateway, LocalStoryboardVideoGateway)
         self.assertEqual(gateway.voice_provider, "elevenlabs")
         self.assertEqual(gateway.elevenlabs_api_key, "test-eleven-key")
-        self.assertEqual(gateway.elevenlabs_voice_id, "ack0QsRaQyDLnVyMQTSd")
+        self.assertEqual(gateway.elevenlabs_voice_id, "siw1N9V8LmYeEWKyWBxv")
         self.assertEqual(gateway.elevenlabs_model_id, "eleven_multilingual_v2")
         self.assertEqual(gateway.local_voice_name, "Allison")
+
+    def test_build_video_gateway_reads_local_openai_voice_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_path = os.path.join(temp_dir, ".env.local")
+            with open(env_path, "w", encoding="utf-8") as handle:
+                handle.write("LMS_VIDEO_PROVIDER=local\n")
+                handle.write("LMS_VOICE_PROVIDER=openai\n")
+                handle.write("OPENAI_API_KEY=test-openai-key\n")
+                handle.write("OPENAI_BASE_URL=https://api.openai.com/v1\n")
+                handle.write("OPENAI_TTS_MODEL=gpt-4o-mini-tts\n")
+                handle.write("OPENAI_TTS_VOICE=marin\n")
+
+            gateway = build_video_gateway(env={}, env_path=env_path)
+
+        self.assertIsInstance(gateway, LocalStoryboardVideoGateway)
+        self.assertEqual(gateway.voice_provider, "openai")
+        self.assertEqual(gateway.openai_api_key, "test-openai-key")
+        self.assertEqual(gateway.openai_base_url, "https://api.openai.com/v1")
+        self.assertEqual(gateway.openai_tts_model, "gpt-4o-mini-tts")
+        self.assertEqual(gateway.openai_tts_voice, "marin")
 
 
 if __name__ == "__main__":
