@@ -20,7 +20,6 @@ from lms_engine.integrations.local_video_assets import (
     stitch_scene_clips,
 )
 
-
 DEFAULT_ELEVENLABS_VOICE_ID = "siw1N9V8LmYeEWKyWBxv"
 
 

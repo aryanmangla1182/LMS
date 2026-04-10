@@ -474,6 +474,60 @@ body {
   margin-top: 2px;
 }
 
+.learner-panel {
+  padding: 28px;
+}
+
+.learner-subtabs {
+  margin-bottom: 18px;
+}
+
+.learner-subtabs .subtab {
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.learner-subtabs .subtab.active {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+.learner-course-hero,
+.voice-hero-card {
+  display: grid;
+  gap: 18px;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  background:
+    radial-gradient(circle at top right, rgba(15, 118, 110, 0.08), transparent 35%),
+    linear-gradient(180deg, #ffffff, #f8fbfd);
+}
+
+.learner-course-hero-copy,
+.voice-hero-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.learner-course-stats,
+.voice-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.voice-practice-shell {
+  display: grid;
+  gap: 18px;
+}
+
+.voice-layout {
+  align-items: start;
+}
+
 .course-action-card,
 .pitch-analyzer-card,
 .pitch-session-card {
@@ -482,6 +536,10 @@ body {
 }
 
 .pitch-analyzer-card {
+  gap: 16px;
+}
+
+.voice-guidance-card {
   gap: 16px;
 }
 
@@ -504,8 +562,16 @@ body {
   cursor: pointer;
 }
 
+.voice-result-head {
+  justify-content: space-between;
+}
+
 .pitch-session-summary::-webkit-details-marker {
   display: none;
+}
+
+.pitch-history-card {
+  gap: 16px;
 }
 
 .transcript-block {
@@ -1307,6 +1373,11 @@ pre {
   .review-status-card {
     grid-template-columns: 1fr;
   }
+
+  .learner-course-stats,
+  .voice-hero-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -1322,6 +1393,11 @@ pre {
   .tabs {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .learner-subtabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .header-bar h1 {

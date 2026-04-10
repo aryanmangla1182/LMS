@@ -82,6 +82,5 @@ class VideoConfigTestCase(unittest.TestCase):
         self.assertEqual(gateway.openai_tts_model, "gpt-4o-mini-tts")
         self.assertEqual(gateway.openai_tts_voice, "marin")
 
-
 if __name__ == "__main__":
     unittest.main()

@@ -53,7 +53,6 @@
           <form id="request-code-form" class="form auth-form">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Step 1</p>
                 <h2>Request Code</h2>
               </div>
             </div>
@@ -72,7 +71,6 @@
           <form id="verify-code-form" class="form auth-form hidden">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Step 2</p>
                 <h2>Enter Code</h2>
               </div>
             </div>
@@ -132,12 +130,10 @@
               <label class="segment-field">Segment
                 <select name="segment" class="segment-select" required>
                   <option value="Fitness Services">Fitness Services</option>
-                  <option value="Fitness Equipments">Fitness Equipments</option>
+                  <option value="Fitness Products">Fitness Products</option>
                 </select>
               </label>
               <label>Role Title<input name="title" value="Store Manager" required></label>
-              <label>Level<input name="level" value="L3" required></label>
-              <label>Legacy Mapping<input name="legacy_mappings" value="Store Lead, Senior Associate"></label>
               <label>Work Summary<textarea name="work_summary" rows="3">Owns day-to-day store performance, staff coaching, compliance, and local business outcomes.</textarea></label>
               <label>Responsibilities<textarea name="responsibilities" rows="6">Open and close the store without compliance gaps
 Coach staff on service and conversion
@@ -241,7 +237,6 @@ Conv|CONVERSION|30|%|0.85</textarea></label>
             <form id="learner-form" class="form">
               <label>Name<input name="name" value="Asha Menon" required></label>
               <label>Mobile Number<input name="phone_number" value="9000000003" required></label>
-              <label>Org Unit<input name="org_unit" value="Retail South"></label>
               <label>Published Role<select id="role-select" name="role_id" required></select></label>
               <button type="submit" class="primary">Create User And Assign Role</button>
             </form>
@@ -260,15 +255,34 @@ Conv|CONVERSION|30|%|0.85</textarea></label>
       </section>
 
       <section id="learner" class="tab-panel learner-only">
-        <article class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="eyebrow">Assigned Course</p>
-              <h2 id="learner-course-title">My Learning Journey</h2>
+        <nav class="subtabs learner-subtabs" data-group="learner">
+          <button class="subtab active" data-group="learner" data-subtab="learner-course">Course</button>
+          <button class="subtab" data-group="learner" data-subtab="learner-voice">Voice Practice</button>
+        </nav>
+
+        <section id="learner-course" class="subtab-panel active" data-group="learner">
+          <article class="panel learner-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Assigned Course</p>
+                <h2 id="learner-course-title">My Learning Journey</h2>
+              </div>
             </div>
-          </div>
-          <div id="course-view" class="stack"></div>
-        </article>
+            <div id="course-view" class="stack"></div>
+          </article>
+        </section>
+
+        <section id="learner-voice" class="subtab-panel" data-group="learner">
+          <article class="panel learner-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Voice Practice</p>
+                <h2>Sales Pitch Coach</h2>
+              </div>
+            </div>
+            <div id="voice-view" class="stack"></div>
+          </article>
+        </section>
       </section>
 
       <section id="trainer" class="tab-panel trainer-only">

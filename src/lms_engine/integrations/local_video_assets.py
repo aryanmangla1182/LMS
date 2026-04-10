@@ -107,7 +107,6 @@ def render_elevenlabs_voiceover(
     except URLError as exc:
         raise ValueError("ElevenLabs voice request failed: {0}".format(exc.reason)) from exc
 
-
 def render_openai_voiceover(
     text: str,
     output_path: Path,
@@ -142,8 +141,6 @@ def render_openai_voiceover(
         raise ValueError("OpenAI voice request failed: {0}".format(body or exc.reason)) from exc
     except URLError as exc:
         raise ValueError("OpenAI voice request failed: {0}".format(exc.reason)) from exc
-
-
 def render_voice_track(
     text: str,
     output_path: Path,

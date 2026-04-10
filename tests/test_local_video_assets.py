@@ -139,7 +139,6 @@ class LocalVideoAssetsTestCase(unittest.TestCase):
             self.assertIn(b'"model": "gpt-4o-mini-tts"', req.data)
             self.assertIn(b'"voice": "marin"', req.data)
             self.assertIn(b'"response_format": "mp3"', req.data)
-
     def test_render_voice_track_requires_elevenlabs_credentials(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             output_path = Path(temp_dir) / "voiceover.mp3"
